@@ -1,0 +1,19 @@
+{
+  "settings": [
+    {
+      "env_token_name": "GENAI_API_KEY_1",
+      "name": "Анна",
+      "character_path": "./characters/character_1.txt"
+    },
+    {
+      "env_token_name": "GENAI_API_KEY_2",
+      "name": "Артур",
+      "character_path": "./characters/character_2.txt"
+    },
+    {
+      "env_token_name": "GENAI_API_KEY_3",
+      "name": "Аврора",
+      "character_path": "./characters/character_3.txt"
+    }
+  ]
+} 
