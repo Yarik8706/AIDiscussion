@@ -18,14 +18,15 @@ def strip_markdown(text):
     text = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1', text) # [text](url)
     return text
 
-async def run_discussion(participants, question: str, max_rounds: int = 30, send_callback=None):
-    logging.info(f"Начало обсуждения: {question}")
-    discussion_history = [f"Тема для обсуждения: {question}"]
+async def run_discussion(participants, question: str, max_rounds: int = 50, send_callback=None):
+    print("show_discussion called test")
+    print(f"Начало обсуждения: {question}")
+    discussion_history = [f"Вопрос пользователя: {question}. Вы должны ответить на заданную тему за {max_rounds*len(participants)} сообщений. Контролируйте ваше обсуждение, чтобы прийти к общему ответу на тему за данной количеством сообщений."]
     consensus = False
     round_num = 0
     while not consensus and round_num < max_rounds:
         round_num += 1
-        logging.info(f"Раунд {round_num}")
+        print(f"Раунд {round_num}")
         for participant in participants:
             response = await participant.ask(discussion_history)
             response = strip_markdown(response)
@@ -41,9 +42,9 @@ async def run_discussion(participants, question: str, max_rounds: int = 30, send
             response = await participant.ask_without_humanization(consensus_prompt, discussion_history)
             response = strip_markdown(response)
             consensus_answers.append(response.strip().upper())
-        # Завершить, если больше половины ответили ДА
+        # Завершить, если все ответили ДА
         yes_count = sum(ans.startswith('ДА') for ans in consensus_answers)
-        if yes_count > len(participants) // 2:
+        if yes_count == len(participants):
             consensus = True
     logging.info("\n".join(discussion_history))        
     # Итоговый вывод
