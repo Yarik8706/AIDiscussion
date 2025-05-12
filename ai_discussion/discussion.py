@@ -1,4 +1,4 @@
-from discusser import Disscuser
+from .discusser import Disscuser
 import asyncio
 import json
 import os
@@ -19,14 +19,13 @@ def strip_markdown(text):
     return text
 
 async def run_discussion(participants, question: str, max_rounds: int = 50, send_callback=None):
-    print("show_discussion called test")
-    print(f"Начало обсуждения: {question}")
+    logging.info(f"Начало обсуждения: {question}")
     discussion_history = [f"Вопрос пользователя: {question}. Вы должны ответить на заданную тему за {max_rounds*len(participants)} сообщений. Контролируйте ваше обсуждение, чтобы прийти к общему ответу на тему за данной количеством сообщений."]
     consensus = False
     round_num = 0
     while not consensus and round_num < max_rounds:
         round_num += 1
-        print(f"Раунд {round_num}")
+        logging.info(f"Раунд {round_num}")
         for participant in participants:
             response = await participant.ask(discussion_history)
             response = strip_markdown(response)
@@ -60,12 +59,4 @@ async def run_discussion(participants, question: str, max_rounds: int = 50, send
     except Exception as e:
         summary = f"Ошибка при получении вывода: {e}"
     logging.info("Обсуждение завершено")
-    return summary
-
-# Пример для ручного запуска
-if __name__ == "__main__":
-    import sys
-    question = sys.argv[1] if len(sys.argv) > 1 else "В чем смысл жизни?"
-    summary = asyncio.run(run_discussion(max_rounds=1))
-    print("\nИтоговый вывод:")
-    print(summary)
+    return summary, discussion_history 

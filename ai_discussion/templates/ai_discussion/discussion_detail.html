@@ -1,0 +1,160 @@
+{% extends 'ai_discussion/base.html' %}
+
+{% block title %}Обсуждение - {{ discussion.question|truncatechars:50 }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'ai_discussion:home' %}">Главная</a></li>
+                <li class="breadcrumb-item active">Обсуждение</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h2 class="mb-0 fs-4">Вопрос пользователя</h2>
+    </div>
+    <div class="card-body">
+        <p class="lead">{{ discussion.question }}</p>
+        <p class="text-muted mb-0">
+            <small>Создано: {{ discussion.created_at|date:"d.m.Y H:i" }}</small>
+        </p>
+    </div>
+</div>
+
+{% if discussion.completed and discussion.summary %}
+<div class="card mb-5 border-success">
+    <div class="card-header bg-success text-white">
+        <h3 class="mb-0 fs-5">Итог обсуждения</h3>
+    </div>
+    <div class="card-body">
+        <div class="fs-5">{{ discussion.summary|linebreaks }}</div>
+    </div>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">Ход обсуждения</h3>
+    {% if not discussion.completed %}
+    <div id="discussion-status" class="d-flex align-items-center">
+        <div class="spinner-border text-primary me-2" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+        <span>Обсуждение в процессе...</span>
+    </div>
+    {% endif %}
+</div>
+
+<div id="messages-container">
+    {% for message in messages %}
+    <div class="card message-card mb-3 fade-in">
+        <div class="card-body">
+            {{ message.content|safe }}
+        </div>
+        <div class="card-footer text-muted">
+            <small>{{ message.created_at|date:"d.m.Y H:i:s" }}</small>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center py-5" id="no-messages">
+        <p class="text-muted">Сообщения загружаются...</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="text-center my-5">
+    <a href="{% url 'ai_discussion:home' %}" class="btn btn-outline-primary me-3">
+        <i class="fas fa-arrow-left me-2"></i>Вернуться на главную
+    </a>
+    <a href="{% url 'ai_discussion:discussions_list' %}" class="btn btn-outline-primary">
+        <i class="fas fa-list me-2"></i>Все обсуждения
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if not discussion.completed %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let messageCount = {{ messages|length }};
+    const messagesContainer = document.getElementById('messages-container');
+    const discussionStatus = document.getElementById('discussion-status');
+    const noMessages = document.getElementById('no-messages');
+    
+    // Function to check discussion status
+    function checkStatus() {
+        fetch('{% url "ai_discussion:get_discussion_status" discussion.id %}')
+            .then(response => response.json())
+            .then(data => {
+                // If new messages
+                if (data.message_count > messageCount) {
+                    // Remove no messages placeholder if exists
+                    if (noMessages) {
+                        noMessages.remove();
+                    }
+                    
+                    // Add new messages
+                    const newMessages = data.messages.slice(messageCount);
+                    newMessages.forEach(message => {
+                        const messageCard = document.createElement('div');
+                        messageCard.className = 'card message-card mb-3 fade-in';
+                        messageCard.innerHTML = `
+                            <div class="card-body">
+                                ${message.content}
+                            </div>
+                            <div class="card-footer text-muted">
+                                <small>${new Date(message.created_at).toLocaleString()}</small>
+                            </div>
+                        `;
+                        messagesContainer.appendChild(messageCard);
+                    });
+                    
+                    messageCount = data.message_count;
+                    
+                    // Scroll to bottom
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
+                
+                // Check if discussion completed
+                if (data.completed) {
+                    // Update status
+                    discussionStatus.remove();
+                    
+                    // Add summary if not already exists
+                    if (data.summary && !document.querySelector('.border-success')) {
+                        const summaryCard = document.createElement('div');
+                        summaryCard.className = 'card mb-5 border-success';
+                        summaryCard.innerHTML = `
+                            <div class="card-header bg-success text-white">
+                                <h3 class="mb-0 fs-5">Итог обсуждения</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="fs-5">${data.summary.replace(/\n/g, '<br>')}</div>
+                            </div>
+                        `;
+                        document.querySelector('.card.mb-4').after(summaryCard);
+                    }
+                    
+                    // Reload page to reflect changes
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    // Check again in 5 seconds
+                    setTimeout(checkStatus, 5000);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking status:', error);
+                setTimeout(checkStatus, 10000); // Try again in 10 seconds on error
+            });
+    }
+    
+    // Start checking
+    checkStatus();
+});
+</script>
+{% endif %}
+{% endblock %} 

@@ -25,13 +25,6 @@ class Disscuser:
                 model=self.model,
                 contents=prompt2
             )
-            # answer2 = response2.text.strip() if hasattr(response2, 'text') else str(response2)
-            # # 3. Убрать признаки ИИ
-            # prompt3 = f"Убери из этого текста все признаки, что его написал ИИ, и сделай его максимально естественным: '{answer2}'. С учетом своего характера: '{self.context}'"
-            # response3 = await self.client.aio.models.generate_content(
-            #     model=self.model,
-            #     contents=prompt3
-            # )
             response = response2
             answer = response.text.strip() if hasattr(response, 'text') else str(response)
             return answer
@@ -48,4 +41,4 @@ class Disscuser:
             )
             return response.text.strip() if hasattr(response, 'text') else str(response)
         except Exception as e:
-            return f"Gemini API error: {e}"
+            return f"Gemini API error: {e}" 
