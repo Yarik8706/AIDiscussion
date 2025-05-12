@@ -5,6 +5,7 @@ from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.db import transaction
 from django.utils import timezone
+from django.contrib import messages
 from asgiref.sync import sync_to_async
 from .models import Discussion, Message
 from .settings_loader import load_participants
@@ -66,6 +67,26 @@ def start_discussion(request):
     except Exception as e:
         logger.error(f"Error starting discussion: {e}")
         return HttpResponseBadRequest(f'Ошибка: {str(e)}')
+
+@csrf_exempt
+@require_POST
+def delete_discussion(request, discussion_id):
+    """Удалить обсуждение"""
+    try:
+        discussion = get_object_or_404(Discussion, id=discussion_id)
+        discussion.delete()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'success'})
+        else:
+            messages.success(request, "Обсуждение успешно удалено.")
+            return redirect('ai_discussion:discussions_list')
+    except Exception as e:
+        logger.error(f"Error deleting discussion: {e}")
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+        else:
+            messages.error(request, f"Ошибка при удалении обсуждения: {str(e)}")
+            return redirect('ai_discussion:discussion_detail', discussion_id=discussion_id)
 
 # Создаем синхронные обертки для операций с базой данных
 @sync_to_async

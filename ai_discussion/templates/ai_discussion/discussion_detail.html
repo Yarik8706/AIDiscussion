@@ -15,14 +15,42 @@
 </div>
 
 <div class="card mb-4">
-    <div class="card-header bg-primary text-white">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h2 class="mb-0 fs-4">Вопрос пользователя</h2>
+        <div>
+            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                <i class="fas fa-trash-alt me-1"></i>Удалить
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <p class="lead">{{ discussion.question }}</p>
         <p class="text-muted mb-0">
             <small>Создано: {{ discussion.created_at|date:"d.m.Y H:i" }}</small>
         </p>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы действительно хотите удалить это обсуждение?</p>
+                <p class="text-danger">Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form action="{% url 'ai_discussion:delete_discussion' discussion.id %}" method="post" id="delete-form">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -54,9 +82,6 @@
     <div class="card message-card mb-3 fade-in">
         <div class="card-body">
             {{ message.content|safe }}
-        </div>
-        <div class="card-footer text-muted">
-            <small>{{ message.created_at|date:"d.m.Y H:i:s" }}</small>
         </div>
     </div>
     {% empty %}
@@ -105,9 +130,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageCard.innerHTML = `
                             <div class="card-body">
                                 ${message.content}
-                            </div>
-                            <div class="card-footer text-muted">
-                                <small>${new Date(message.created_at).toLocaleString()}</small>
                             </div>
                         `;
                         messagesContainer.appendChild(messageCard);

@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('discussions/', views.discussions_list, name='discussions_list'),
     path('discussion/<int:discussion_id>/', views.discussion_detail, name='discussion_detail'),
+    path('discussion/<int:discussion_id>/delete/', views.delete_discussion, name='delete_discussion'),
     path('api/discussion/start/', views.start_discussion, name='start_discussion'),
     path('api/discussion/<int:discussion_id>/status/', views.get_discussion_status, name='get_discussion_status'),
 ] 
