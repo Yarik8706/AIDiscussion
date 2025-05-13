@@ -10,6 +10,16 @@
                 <h1 class="display-5 mb-4">Задайте вопрос AI участникам</h1>
                 <p class="lead mb-4">Наша система организует дискуссию между несколькими AI участниками с разными характерами и взглядами, которые обсудят ваш вопрос.</p>
                 
+                {% if is_authenticated %}
+                <div class="alert alert-success mb-4">
+                    <i class="fas fa-check-circle me-2"></i> Вы авторизованы! Ваши обсуждения будут сохранены в вашем аккаунте и доступны на всех устройствах.
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i> <a href="{% url 'ai_discussion:login' %}" class="alert-link">Войдите</a> в систему, чтобы ваши обсуждения сохранялись в вашем аккаунте и были доступны на всех устройствах.
+                </div>
+                {% endif %}
+                
                 <form id="questionForm" class="mb-4">
                     <div class="form-group mb-3">
                         <textarea id="questionInput" class="form-control form-control-lg" rows="3" placeholder="Введите ваш вопрос здесь..." required></textarea>
@@ -27,7 +37,7 @@
         </div>
         
         {% if discussions %}
-        <h2 class="mb-4">Недавние обсуждения</h2>
+        <h2 class="mb-4">{% if is_authenticated %}Ваши недавние обсуждения{% else %}Недавние обсуждения{% endif %}</h2>
         <div class="row">
             {% for discussion in discussions %}
             <div class="col-md-6 mb-4">
@@ -45,6 +55,14 @@
             </div>
             {% endfor %}
         </div>
+        
+        {% if is_authenticated %}
+        <div class="text-center mt-3">
+            <a href="{% url 'ai_discussion:discussions_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-list me-1"></i>Посмотреть все ваши обсуждения
+            </a>
+        </div>
+        {% endif %}
         {% endif %}
     </div>
 </div>
@@ -66,12 +84,21 @@ document.addEventListener('DOMContentLoaded', function() {
         questionForm.classList.add('d-none');
         loadingIndicator.classList.remove('d-none');
         
+        // Get Firebase token for authentication
+        const token = localStorage.getItem('firebaseToken');
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        
+        // Add authentication token if available
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         // Submit question via API
         fetch('{% url "ai_discussion:start_discussion" %}', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: headers,
             body: JSON.stringify({
                 question: question
             })

@@ -14,6 +14,8 @@ import asyncio
 import json
 import logging
 import threading
+from utils.firebase_auth import firebase_auth_required
+from utils.firebase_config import get_firestore_db
 
 # Set up logging
 logging.basicConfig(level=logging.INFO,
@@ -31,15 +33,28 @@ def get_participants():
 
 def home(request):
     """Главная страница с формой для вопроса"""
-    discussions = Discussion.objects.all().order_by('-created_at')[:5]
-    return render(request, 'ai_discussion/home.html', {'discussions': discussions})
+    discussions = []
+    if request.firebase_user_id:
+        discussions = Discussion.objects.filter(firebase_user_id=request.firebase_user_id).order_by('-created_at')[:5]
+    return render(request, 'ai_discussion/home.html', {
+        'discussions': discussions,
+        'is_authenticated': request.firebase_user_id is not None
+    })
 
 def discussion_detail(request, discussion_id):
     """Страница отдельного обсуждения"""
     discussion = get_object_or_404(Discussion, id=discussion_id)
+    
+    # Проверка доступа: если обсуждение привязано к пользователю, только он может его просматривать
+    if discussion.firebase_user_id and discussion.firebase_user_id != request.firebase_user_id:
+        return render(request, 'ai_discussion/error.html', {'error': 'У вас нет доступа к этому обсуждению'})
+        
     messages = discussion.messages.all().order_by('created_at')
-    return render(request, 'ai_discussion/discussion_detail.html', 
-                  {'discussion': discussion, 'messages': messages})
+    return render(request, 'ai_discussion/discussion_detail.html', {
+        'discussion': discussion, 
+        'messages': messages,
+        'is_authenticated': request.firebase_user_id is not None
+    })
 
 @csrf_exempt
 @require_POST
@@ -52,7 +67,10 @@ def start_discussion(request):
             return HttpResponseBadRequest('Вопрос не может быть пустым')
         
         # Создаем новое обсуждение в БД
-        discussion = Discussion.objects.create(question=question)
+        discussion = Discussion.objects.create(
+            question=question,
+            firebase_user_id=request.firebase_user_id
+        )
         
         # Запускаем асинхронное обсуждение в отдельном потоке
         threading.Thread(
@@ -70,10 +88,16 @@ def start_discussion(request):
 
 @csrf_exempt
 @require_POST
+@firebase_auth_required
 def delete_discussion(request, discussion_id):
     """Удалить обсуждение"""
     try:
         discussion = get_object_or_404(Discussion, id=discussion_id)
+        
+        # Проверка доступа: только владелец может удалить обсуждение
+        if discussion.firebase_user_id and discussion.firebase_user_id != request.firebase_user_id:
+            return JsonResponse({'status': 'error', 'message': 'У вас нет доступа к этому обсуждению'}, status=403)
+            
         discussion.delete()
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'status': 'success'})
@@ -125,6 +149,39 @@ async def process_discussion(discussion_id, question):
         # Сохраняем результат
         await update_discussion(discussion, summary, True)
         
+        # Если обсуждение привязано к пользователю, сохраняем его в Firestore
+        if discussion.firebase_user_id:
+            try:
+                # Получаем экземпляр Firestore
+                db = get_firestore_db()
+                
+                # Создаем словарь с данными обсуждения
+                discussion_data = {
+                    'id': discussion.id,
+                    'question': discussion.question,
+                    'summary': discussion.summary,
+                    'created_at': discussion.created_at.isoformat(),
+                    'completed': discussion.completed,
+                    'user_id': discussion.firebase_user_id,
+                }
+                
+                # Сохраняем в Firestore
+                db.collection('discussions').document(str(discussion.id)).set(discussion_data)
+                
+                # Сохраняем сообщения
+                for idx, msg in enumerate(messages):
+                    message_data = {
+                        'content': msg,
+                        'created_at': timezone.now().isoformat(),
+                        'discussion_id': discussion.id,
+                        'order': idx
+                    }
+                    db.collection('discussions').document(str(discussion.id)).collection('messages').add(message_data)
+                
+                logger.info(f"Discussion {discussion_id} saved to Firestore for user {discussion.firebase_user_id}")
+            except Exception as e:
+                logger.error(f"Error saving to Firestore: {e}")
+        
         logger.info(f"Discussion {discussion_id} completed successfully")
     except Exception as e:
         logger.error(f"Error in discussion {discussion_id}: {e}")
@@ -137,8 +194,16 @@ async def process_discussion(discussion_id, question):
             logger.error(f"Error updating discussion status: {inner_e}")
 
 @sync_to_async
-def get_discussion_and_messages(discussion_id):
+def get_discussion_and_messages(discussion_id, user_id=None):
     discussion = get_object_or_404(Discussion, id=discussion_id)
+    
+    # Проверка доступа
+    if discussion.firebase_user_id and discussion.firebase_user_id != user_id:
+        return {
+            'status': 'error',
+            'error': 'Unauthorized'
+        }
+        
     messages = list(discussion.messages.all().order_by('created_at').values('content', 'created_at'))
     return {
         'status': 'completed' if discussion.completed else 'in_progress',
@@ -150,10 +215,40 @@ def get_discussion_and_messages(discussion_id):
 
 async def get_discussion_status(request, discussion_id):
     """Получить статус обсуждения и сообщения"""
-    data = await get_discussion_and_messages(discussion_id)
+    data = await get_discussion_and_messages(discussion_id, request.firebase_user_id)
+    if 'error' in data:
+        return JsonResponse(data, status=403)
     return JsonResponse(data)
 
 def discussions_list(request):
     """Список всех обсуждений"""
-    discussions = Discussion.objects.all().order_by('-created_at')
-    return render(request, 'ai_discussion/discussions_list.html', {'discussions': discussions})
+    if request.firebase_user_id:
+        # Для авторизованных пользователей показываем только их обсуждения
+        discussions = Discussion.objects.filter(firebase_user_id=request.firebase_user_id).order_by('-created_at')
+    else:
+        # Для неавторизованных пользователей показываем публичные обсуждения
+        discussions = Discussion.objects.filter(firebase_user_id__isnull=True).order_by('-created_at')
+    
+    return render(request, 'ai_discussion/discussions_list.html', {
+        'discussions': discussions,
+        'is_authenticated': request.firebase_user_id is not None
+    })
+
+@firebase_auth_required
+def user_discussions(request):
+    """API для получения обсуждений текущего пользователя"""
+    discussions = Discussion.objects.filter(firebase_user_id=request.firebase_user_id).order_by('-created_at')
+    data = []
+    for discussion in discussions:
+        data.append({
+            'id': discussion.id,
+            'question': discussion.question,
+            'summary': discussion.summary,
+            'created_at': discussion.created_at.isoformat(),
+            'completed': discussion.completed,
+        })
+    return JsonResponse({'discussions': data})
+
+def user_login(request):
+    """Страница входа"""
+    return render(request, 'ai_discussion/login.html')

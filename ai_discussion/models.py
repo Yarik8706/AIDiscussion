@@ -7,6 +7,7 @@ class Discussion(models.Model):
     summary = models.TextField(verbose_name="Итог обсуждения", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     completed = models.BooleanField(default=False, verbose_name="Завершено")
+    firebase_user_id = models.CharField(max_length=128, verbose_name="Firebase UID", blank=True, null=True)
     
     class Meta:
         verbose_name = "Обсуждение"

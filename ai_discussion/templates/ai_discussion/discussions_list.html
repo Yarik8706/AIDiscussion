@@ -8,7 +8,7 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{% url 'ai_discussion:home' %}">Главная</a></li>
-                <li class="breadcrumb-item active">Все обсуждения</li>
+                <li class="breadcrumb-item active">{% if is_authenticated %}Ваши обсуждения{% else %}Все обсуждения{% endif %}</li>
             </ol>
         </nav>
     </div>
@@ -27,10 +27,16 @@
 
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">
-        <h2 class="fs-4 mb-0">Все обсуждения</h2>
+        <h2 class="fs-4 mb-0">{% if is_authenticated %}Ваши обсуждения{% else %}Все обсуждения{% endif %}</h2>
     </div>
     
     <div class="card-body">
+        {% if not is_authenticated %}
+        <div class="alert alert-info mb-4">
+            <i class="fas fa-info-circle me-2"></i> <a href="{% url 'ai_discussion:login' %}" class="alert-link">Войдите</a> в систему, чтобы ваши обсуждения сохранялись в вашем аккаунте и были доступны на всех устройствах.
+        </div>
+        {% endif %}
+        
         <div class="mb-4">
             <a href="{% url 'ai_discussion:home' %}" class="btn btn-primary">
                 <i class="fas fa-plus-circle me-2"></i>Создать новое обсуждение
@@ -65,11 +71,13 @@
                                 <a href="{% url 'ai_discussion:discussion_detail' discussion.id %}" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-eye me-1"></i>Посмотреть
                                 </a>
+                                {% if is_authenticated %}
                                 <button type="button" class="btn btn-sm btn-outline-danger" 
                                         data-bs-toggle="modal" 
                                         data-bs-target="#deleteModal-{{ discussion.id }}">
                                     <i class="fas fa-trash-alt me-1"></i>Удалить
                                 </button>
+                                {% endif %}
                             </div>
                             
                             <!-- Модальное окно подтверждения удаления -->
@@ -103,7 +111,7 @@
         </div>
         {% else %}
         <div class="text-center py-5">
-            <p class="text-muted mb-3">Пока нет обсуждений</p>
+            <p class="text-muted mb-3">{% if is_authenticated %}У вас пока нет обсуждений{% else %}Пока нет обсуждений{% endif %}</p>
             <a href="{% url 'ai_discussion:home' %}" class="btn btn-primary">
                 <i class="fas fa-plus-circle me-2"></i>Создать первое обсуждение
             </a>

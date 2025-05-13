@@ -1,4 +1,4 @@
-from .discusser import Disscuser
+from .discusser import Discusser    
 import asyncio
 import json
 import os
@@ -20,7 +20,7 @@ def strip_markdown(text):
 
 async def run_discussion(participants, question: str, max_rounds: int = 50, send_callback=None):
     logging.info(f"Начало обсуждения: {question}")
-    discussion_history = [f"Вопрос пользователя: {question}. Вы должны ответить на заданную тему за {max_rounds*len(participants)} сообщений. Контролируйте ваше обсуждение, чтобы прийти к общему ответу на тему за данной количеством сообщений."]
+    discussion_history = [f"Вопрос пользователя: {question}. Вы должны ответить на заданную тему за 150 сообщений. Контролируйте ваше обсуждение, чтобы прийти к общему ответу на тему за данной количеством сообщений."]
     consensus = False
     round_num = 0
     while not consensus and round_num < max_rounds:
@@ -49,7 +49,7 @@ async def run_discussion(participants, question: str, max_rounds: int = 50, send
     # Итоговый вывод
     summary = None
     try:
-        summary_participant = Disscuser(os.getenv('GENAI_API_KEY_1'), "Ты ии который максимально рационально рассуждаешь", "ИИ")
+        summary_participant = Discusser(os.getenv('GENAI_API_KEY_1'), "Ты ии который максимально рационально рассуждаешь", "ИИ")
         summary_prompt = "Вот весь диалог между ИИ. Сделай краткий, структурированный и читабельный вывод для пользователя, к которому пришли участники обсуждения."
         summary = await summary_participant.ask_without_humanization(summary_prompt, discussion_history)
         if isinstance(summary, (tuple, list)):

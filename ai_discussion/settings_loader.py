@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from django.conf import settings
-from .discusser import Disscuser
+from .discusser import Discusser
 
 def get_general_context_path():
     return os.path.join(settings.BASE_DIR, 'general_context.txt')
@@ -36,7 +36,7 @@ def load_participants(settings_path=None):
             with open(character_path, 'r', encoding='utf-8') as cf:
                 context = cf.read().strip()
             full_context = context + '\n' + general_context 
-            participants.append(Disscuser(api_key, full_context, net['name']))
+            participants.append(Discusser(api_key, full_context, net['name']))
             logging.info(f"Загружен участник: {net['name']} ({character_path})")
         except Exception as e:
             logging.error(f"Ошибка при загрузке характера для {net['name']}: {e}")

@@ -6,4 +6,8 @@ whitenoise
 dj-database-url
 gunicorn
 psycopg2-binary
-django-cors-headers 
+django-cors-headers
+firebase-admin
+pyrebase4 
+autogen-agentchat>=0.4.0
+autogen-ext[openai]>=0.4.0

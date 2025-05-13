@@ -87,6 +87,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'ai_discussion:discussions_list' %}">Все обсуждения</a>
                     </li>
+                    <li class="nav-item" id="auth-link-container">
+                        <!-- This will be populated by JavaScript based on authentication state -->
+                    </li>
                 </ul>
             </div>
         </div>
@@ -108,6 +111,83 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Firebase Core JS (needed on all pages) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    
+    <script>
+    // Firebase конфигурация (загружается из переменных окружения через Django-контекст)
+    const firebaseConfig = {
+        apiKey: "{{ FIREBASE_API_KEY|default:'YOUR_API_KEY' }}",
+        authDomain: "{{ FIREBASE_AUTH_DOMAIN|default:'YOUR_AUTH_DOMAIN' }}",
+        projectId: "{{ FIREBASE_PROJECT_ID|default:'YOUR_PROJECT_ID' }}",
+        storageBucket: "{{ FIREBASE_STORAGE_BUCKET|default:'YOUR_STORAGE_BUCKET' }}",
+        messagingSenderId: "{{ FIREBASE_MESSAGING_SENDER_ID|default:'YOUR_MESSAGING_SENDER_ID' }}",
+        appId: "{{ FIREBASE_APP_ID|default:'YOUR_APP_ID' }}"
+    };
+    
+    // Инициализация Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    
+    // Добавление токена к запросам
+    const addTokenToRequest = (xhr) => {
+        const token = localStorage.getItem('firebaseToken');
+        if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+    };
+    
+    // Перехватываем все AJAX-запросы и добавляем токен
+    $(document).ajaxSend(function(event, xhr, settings) {
+        addTokenToRequest(xhr);
+    });
+    
+    // Функция для обновления UI на основе состояния аутентификации
+    const updateAuthUI = (user) => {
+        const authLinkContainer = document.getElementById('auth-link-container');
+        if (user) {
+            // Пользователь авторизован
+            authLinkContainer.innerHTML = `
+                <a class="nav-link btn btn-outline-primary btn-sm" href="#" id="logout-button">
+                    <i class="fas fa-sign-out-alt me-1"></i>Выйти
+                </a>
+            `;
+            // Добавляем обработчик для кнопки выхода
+            document.getElementById('logout-button').addEventListener('click', (e) => {
+                e.preventDefault();
+                firebase.auth().signOut().then(() => {
+                    localStorage.removeItem('firebaseToken');
+                    window.location.href = "{% url 'ai_discussion:home' %}";
+                });
+            });
+        } else {
+            // Пользователь не авторизован
+            authLinkContainer.innerHTML = `
+                <a class="nav-link btn btn-primary btn-sm" href="{% url 'ai_discussion:login' %}">
+                    <i class="fas fa-sign-in-alt me-1"></i>Войти
+                </a>
+            `;
+        }
+    };
+    
+    // Слушаем изменения состояния аутентификации
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            // Пользователь авторизован
+            user.getIdToken().then(token => {
+                localStorage.setItem('firebaseToken', token);
+                updateAuthUI(user);
+            });
+        } else {
+            // Пользователь не авторизован
+            localStorage.removeItem('firebaseToken');
+            updateAuthUI(null);
+        }
+    });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>
