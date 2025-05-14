@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 # Cache for participants
 _participants = None
 
-def get_participants():
+async def get_participants():
     global _participants
     if _participants is None:
-        _participants = load_participants()
+        _participants = await load_participants()
     return _participants
 
 def home(request):
@@ -139,7 +139,7 @@ async def process_discussion(discussion_id, question):
             await create_message(discussion, message)
         
         # Запускаем обсуждение с callbacks для сохранения сообщений
-        participants = get_participants()
+        participants = await get_participants()
         summary, messages = await run_discussion(
             participants=participants,
             question=question,

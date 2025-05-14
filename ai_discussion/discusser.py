@@ -1,43 +1,61 @@
 import asyncio
-from autogen_agentchat.agents import AssistantAgent
-from autogen_core.models import ModelInfo
-from autogen_ext.models.openai import OpenAIChatCompletionClient
 import re
-import json
+from typing import Optional, List, Union
 
-class Discusser:
-    def __init__(self, api_key: str, context: str, name: str, model: str = 'gemini-2.0-flash-001'):
+from .ai_backends import AIBackend, GeminiBackend, OpenAIBackend
+from .discusser_base import BaseDiscusser
+
+class Discusser(BaseDiscusser):
+    """AI discusser implementation using pluggable AI backends.
+    
+    This class implements a discusser that can use different AI backends
+    to generate responses in a discussion.
+    """
+    
+    def __init__(self, api_key: str, context: str, name: str, model: str = 'gemini-2.0-flash-001', backend_type: str = 'gemini'):
+        """Initialize the discusser.
+        
+        Args:
+            api_key: The API key for the AI service
+            context: The system context/instructions for the agent
+            name: The name of the discusser
+            model: The model name to use
+            backend_type: The type of AI backend to use
+        """
+        super().__init__(name)
         self.api_key = api_key
         self.context = context
-        self.name = name
         self.model = model
         
         # Transliterate Russian name to ASCII for AutoGen compatibility
         self.agent_name = self._transliterate_name(name)
         
-        # Initialize OpenAI-compatible client for Gemini
-        self.model_client = OpenAIChatCompletionClient(
-            model=model,
-            api_key=api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model_info=ModelInfo(
-                vision=False,  # Adjust based on model capabilities
-                max_tokens=4096,
-                max_input_tokens=8192,
-                max_output_tokens=2048,
-                function_calling=True,    # Required field
-                json_output=True,         # Required field
-                family="google",          # Specify the model family
-                structured_output=True    # Required field
-            ),
-        )
+        # Initialize AI backend based on the specified type
+        self.backend = self._create_backend(backend_type)
         
-        # Create agent with the correct parameter (model_client, not llm)
-        self.agent = AssistantAgent(
-            name=self.agent_name,
-            model_client=self.model_client,
-            system_message=context  # Set the context as system message
-        )
+    async def initialize(self) -> None:
+        """Initialize the AI backend."""
+        await self.backend.initialize()
+        
+    def _create_backend(self, backend_type: str) -> AIBackend:
+        """Create the appropriate AI backend based on the specified type."""
+        if backend_type.lower() == 'gemini':
+            return GeminiBackend(
+                api_key=self.api_key,
+                agent_name=self.agent_name,
+                context=self.context,
+                model=self.model
+            )
+        elif backend_type.lower() == 'openai':
+            # For OpenAI, we use a different default model if none is specified
+            model = self.model if 'gpt' in self.model.lower() else 'gpt-4'
+            return OpenAIBackend(
+                api_key=self.api_key,
+                context=self.context,
+                model=model
+            )
+        else:
+            raise ValueError(f"Unsupported backend type: {backend_type}")
 
     def _transliterate_name(self, name):
         """Transliterate Russian name to ASCII for compatibility with AutoGen requirements."""
@@ -70,48 +88,11 @@ class Discusser:
             
         return result
 
-    def _extract_response_text(self, task_result):
-        """Extract clean text from the TaskResult object."""
-        try:
-            # If it's already a string, return it
-            if isinstance(task_result, str):
-                return task_result
-            
-            # Handle TaskResult objects based on AutoGen documentation
-            # TaskResult contains messages and stopreason
-            if hasattr(task_result, 'messages') and task_result.messages:
-                # Get the last message from the agent
-                for message in reversed(task_result.messages):
-                    # Look for the agent's message (usually the last one from our agent)
-                    if hasattr(message, 'source') and message.source == self.agent_name:
-                        if hasattr(message, 'content'):
-                            return message.content
-            
-            # If we couldn't extract using the structured approach, try converting to string
-            text = str(task_result)
-            
-            # Clean up the response by removing metadata and technical details
-            text = re.sub(r'messages=\[.*?\]', '', text, flags=re.DOTALL)
-            text = re.sub(r'TextMessage\(.*?\)', '', text, flags=re.DOTALL)
-            text = re.sub(r'source=\'.*?\'', '', text)
-            text = re.sub(r'modelsusage=.*?,', '', text)
-            text = re.sub(r'metadata=\{\},', '', text)
-            text = re.sub(r'type=\'TextMessage\'', '', text)
-            text = re.sub(r'stopreason=.*', '', text)
-            text = re.sub(r'content=\'(.*?)\'', r'\1', text)
-            text = re.sub(r'[\[\],()]', '', text)
-            text = re.sub(r'\s+', ' ', text).strip()
-            
-            return text
-        except Exception as e:
-            print(f"Error extracting response: {e}")
-            return str(task_result)
-
-    async def ask(self, prompt):
+    async def ask(self, prompt: Union[str, List[str]]) -> str:
         """Ask a question to this discusser with humanization."""
         # Check if prompt is a string or a list (discussion history)
         if isinstance(prompt, list):
-            discussion_text = "\n".join(prompt)
+            discussion_text = self._format_discussion_history(prompt)
             prompt_with_humanization = f"Текущий ход обсуждения:\n{discussion_text}\n\n{self.name}, предположи, что ты скажешь следующее:"
         else:
             prompt_with_humanization = f"Текущий ход обсуждения:\n{prompt}\n\n{self.name}, предположи, что ты скажешь следующее:"
@@ -123,33 +104,14 @@ class Discusser:
         humanized_result = await self.ask_without_humanization(humanize_prompt)
         return humanized_result
 
-    async def ask_without_humanization(self, prompt, discussion_history=None):
-        """Ask a question directly to the model without additional prompt engineering.
-        
-        Args:
-            prompt: The prompt to send to the model
-            discussion_history: Optional list of previous messages in the discussion
-        """
+    async def ask_without_humanization(self, prompt: str, discussion_history: Optional[List[str]] = None) -> str:
+        """Ask a question directly to the model without additional prompt engineering."""
         try:
-            # If we have discussion_history, incorporate it into the prompt
-            if discussion_history:
-                history_text = "\n".join(discussion_history)
-                full_prompt = f"Текущий ход обсуждения:\n{history_text}\n\n{self.name}, {prompt}"
-            else:
-                full_prompt = prompt
-            
-            # Pass prompt as a named parameter 'task', not as a positional parameter
-            task_result = await self.agent.run(task=full_prompt)
-            response = self._extract_response_text(task_result)
-            return response
+            return await self.backend.generate_response(prompt, discussion_history)
         except Exception as e:
             print(f"Error in ask_without_humanization: {e}")
             return f"Error: {str(e)}"
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the model client."""
-        if hasattr(self, 'model_client'):
-            try:
-                await self.model_client.close()
-            except:
-                pass 
+        await self.backend.close() 

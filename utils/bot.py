@@ -42,7 +42,7 @@ async def cmd_start(message: Message):
 async def handle_message(message: Message):
     global participants
     if participants is None:
-        participants = load_participants()
+        participants = await load_participants()
     user_text = message.text
     logging.info(f"Получен вопрос от пользователя {message.from_user.id}: {user_text}")
     await message.answer("Вопрос принят. Обсуждение начинается...")

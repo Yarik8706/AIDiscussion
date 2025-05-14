@@ -3,17 +3,26 @@
     {
       "env_token_name": "GENAI_API_KEY_1",
       "name": "Анна",
-      "character_path": "./characters/character_1.txt"
+      "character_path": "./characters/character_1.txt",
+      "backend_type": "gemini",
+      "model": "gemini-2.0-flash-001",
+      "discusser_type": "ai"
     },
     {
       "env_token_name": "GENAI_API_KEY_2",
       "name": "Артур",
-      "character_path": "./characters/character_2.txt"
+      "character_path": "./characters/character_2.txt",
+      "backend_type": "gemini",
+      "model": "gemini-2.0-flash-001",
+      "discusser_type": "cognitive"
     },
     {
       "env_token_name": "GENAI_API_KEY_3",
       "name": "Аврора",
-      "character_path": "./characters/character_3.txt"
+      "character_path": "./characters/character_3.txt",
+      "backend_type": "gemini",
+      "model": "gemini-2.0-flash-001",
+      "discusser_type": "ai"
     }
   ]
 } 

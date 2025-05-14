@@ -50,12 +50,14 @@ async def run_discussion(participants, question: str, max_rounds: int = 50, send
     summary = None
     try:
         summary_participant = Discusser(os.getenv('GENAI_API_KEY_1'), "Ты ии который максимально рационально рассуждаешь", "ИИ")
+        await summary_participant.initialize()  # Initialize the AI backend
         summary_prompt = "Вот весь диалог между ИИ. Сделай краткий, структурированный и читабельный вывод для пользователя, к которому пришли участники обсуждения."
         summary = await summary_participant.ask_without_humanization(summary_prompt, discussion_history)
         if isinstance(summary, (tuple, list)):
             summary = "\n".join(str(x) for x in summary if isinstance(x, str))
         summary = str(summary).replace("('[", "").replace("]')", "").replace("('[", "").replace("]')", "").strip()
         summary = strip_markdown(summary)
+        await summary_participant.close()  # Close the AI backend
     except Exception as e:
         summary = f"Ошибка при получении вывода: {e}"
     logging.info("Обсуждение завершено")

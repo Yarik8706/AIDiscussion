@@ -1,109 +1,188 @@
-# AI Дискуссии
+# AI Discussion System
 
-Проект для организации обсуждений между несколькими AI участниками с разными характерами, реализованный на Django с авторизацией через Firebase.
+Система для организации обсуждений между несколькими ИИ-участниками с различными характерами и ролями.
 
-## Описание проекта
+## Архитектура системы
 
-Система позволяет:
-1. Пользователям зарегистрироваться и авторизоваться через Firebase
-2. Задать вопрос через веб-интерфейс
-3. Запустить обсуждение между несколькими AI участниками с разными характерами
-4. Получить итоговое резюме обсуждения
-5. Просматривать историю своих обсуждений, синхронизированную между устройствами
+### Модули и компоненты
 
-## Технологии
+Система построена на основе следующих компонентов:
 
-- Django 5.2
-- Google Gemini API
-- Firebase Authentication
-- Firestore для хранения обсуждений
-- Bootstrap для интерфейса
+1. **Модуль Discusser** - Абстракция для участников обсуждения
+   - `BaseDiscusser` - абстрактный базовый класс для всех дискуссеров
+   - `Discusser` - основная реализация дискуссера на базе AI моделей
+   - `SimpleDiscusser` - простая правило-ориентированная реализация для тестирования
+   - `CognitiveDiscusser` - продвинутая реализация с симуляцией когнитивных процессов
 
-## Установка и запуск
+2. **Модуль AIBackend** - Абстракция для AI-бэкендов
+   - `AIBackend` - абстрактный базовый класс для всех AI-бэкендов
+   - `GeminiBackend` - реализация для работы с Google Gemini API
+   - `OpenAIBackend` - реализация для работы с OpenAI API
 
-### Настройка Firebase
+3. **Фабрика Дискуссеров**
+   - `DiscusserFactory` - класс для создания дискуссеров различных типов
 
-1. Создайте проект в [Firebase Console](https://console.firebase.google.com/)
-2. Включите Authentication и выберите поставщиков авторизации (Email/Password, Google)
-3. Создайте базу данных Firestore
-4. Добавьте веб-приложение и получите конфигурацию Firebase
-5. Создайте сервисный аккаунт Firebase и скачайте JSON-ключ
-6. Разместите ключ сервисного аккаунта в корне проекта как `firebase-service-account.json`
+4. **Загрузка настроек**
+   - `settings_loader.py` - загрузка настроек и создание дискуссеров
 
-### Локальная разработка
+### Диаграмма классов
 
-1. Клонируйте репозиторий
 ```
-git clone https://github.com/yourusername/ai-discussion.git
-cd ai-discussion
-```
+BaseDiscusser (abstract)
+    |
+    ├── Discusser (AI-based)
+    |       |
+    |       ├── Uses AIBackend
+    |       |
+    |       └── CognitiveDiscusser (Group chat simulation)
+    |
+    └── SimpleDiscusser (Rule-based)
 
-2. Создайте и активируйте виртуальное окружение
-```
-python -m venv venv
-source venv/bin/activate  # для Linux/Mac
-venv\Scripts\activate     # для Windows
-```
 
-3. Установите зависимости
-```
-pip install -r requirements.txt
-```
+AIBackend (abstract)
+    |
+    ├── GeminiBackend
+    |
+    └── OpenAIBackend
 
-4. Создайте файл `.env` с вашими API ключами и настройками Firebase
-```
-GENAI_API_KEY_1=ваш_ключ_gemini_api
-SECRET_KEY=секретный_ключ_django
-DEBUG=True
 
-# Firebase configuration
-FIREBASE_API_KEY=ваш_api_key
-FIREBASE_AUTH_DOMAIN=ваш_проект.firebaseapp.com
-FIREBASE_DATABASE_URL=https://ваш_проект.firebaseio.com
-FIREBASE_PROJECT_ID=ваш_проект
-FIREBASE_STORAGE_BUCKET=ваш_проект.appspot.com
-FIREBASE_MESSAGING_SENDER_ID=ваш_sender_id
-FIREBASE_APP_ID=ваш_app_id
+DiscusserFactory
+    |
+    └── Creates instances of BaseDiscusser subclasses
 ```
 
-5. Выполните миграции базы данных
+## Как использовать
+
+### Пример создания дискуссеров
+
+```python
+# Создание ИИ-дискуссера с бэкендом Gemini
+discusser = Discusser(
+    api_key="ваш_api_ключ",
+    context="Инструкции и контекст для ИИ",
+    name="Имя дискуссера",
+    model="gemini-2.0-flash-001",
+    backend_type="gemini"
+)
+await discusser.initialize()
+
+# Создание простого правило-ориентированного дискуссера
+simple_discusser = SimpleDiscusser(
+    name="Имя",
+    personality="дружелюбный",
+    responses=["Список", "предопределенных", "ответов"]
+)
+await simple_discusser.initialize()
+
+# Создание когнитивного дискуссера с симуляцией мышления
+cognitive_discusser = CognitiveDiscusser(
+    api_key="ваш_api_ключ",
+    context="Инструкции и контекст для ИИ",
+    name="Имя дискуссера",
+    model="gemini-2.0-flash-001",
+    backend_type="gemini"
+)
+await cognitive_discusser.initialize()
+
+# Или с использованием фабрики
+discusser = await DiscusserFactory.create_discusser(
+    discusser_type="cognitive",  # ai, simple, cognitive
+    name="Имя",
+    config={
+        "api_key": "ваш_api_ключ",
+        "context": "Инструкции и контекст",
+        "model": "gemini-2.0-flash-001",
+        "backend_type": "gemini"
+    }
+)
 ```
-python manage.py makemigrations
-python manage.py migrate
+
+### Настройка через JSON
+
+Система поддерживает настройку через JSON-файл:
+
+```json
+{
+  "settings": [
+    {
+      "env_token_name": "GENAI_API_KEY_1",
+      "name": "Анна",
+      "character_path": "./characters/character_1.txt",
+      "backend_type": "gemini",
+      "model": "gemini-2.0-flash-001",
+      "discusser_type": "ai"
+    },
+    {
+      "env_token_name": "GENAI_API_KEY_2",
+      "name": "Артур",
+      "character_path": "./characters/character_2.txt",
+      "backend_type": "gemini",
+      "model": "gemini-2.0-flash-001",
+      "discusser_type": "cognitive"
+    },
+    {
+      "name": "Максим",
+      "personality": "логичный",
+      "discusser_type": "simple",
+      "responses": [
+        "Давайте рассмотрим этот вопрос логически.",
+        "С точки зрения логики, самое разумное решение - это..."
+      ]
+    }
+  ]
+}
 ```
 
-6. Запустите сервер разработки
+## Типы дискуссеров
+
+### Обычный дискуссер (Discusser)
+Использует AI модель (Gemini или OpenAI) для генерации ответов. Предоставляет базовую функциональность для участия в дискуссиях.
+
+### Простой дискуссер (SimpleDiscusser)
+Использует правила и предопределенные ответы вместо AI. Полезен для тестирования или ситуаций, когда доступ к API ограничен.
+
+### Когнитивный дискуссер (CognitiveDiscusser)
+Расширяет обычного дискуссера, добавляя симуляцию когнитивных процессов с помощью групповых чатов AutoGen:
+
+- **Модуль восприятия** - Анализирует входные данные
+- **Модуль памяти** - Привносит контекст и прошлый опыт
+- **Модуль рассуждения** - Логически анализирует информацию
+- **Эмоциональный модуль** - Добавляет эмоциональную реакцию
+- **Модуль принятия решений** - Формулирует ключевые мысли
+- **Языковой модуль** - Превращает мысли в естественный текст
+
+Этот подход создает более реалистичные и человеческие ответы, имитируя процесс размышления.
+
+## Расширение системы
+
+### Добавление нового типа дискуссера
+
+Для добавления нового типа дискуссера:
+
+1. Создайте класс, наследующийся от `BaseDiscusser` или `Discusser`
+2. Реализуйте все абстрактные методы
+3. Добавьте поддержку нового типа в `DiscusserFactory`
+
+### Добавление нового AI бэкенда
+
+Для добавления поддержки новой AI-платформы:
+
+1. Создайте класс, наследующийся от `AIBackend`
+2. Реализуйте методы `initialize()`, `generate_response()` и `close()`
+3. Обновите метод `_create_backend()` в классе `Discusser`
+
+## Запуск примеров
+
+```bash
+# Базовый пример с разными типами дискуссеров
+python examples/discusser_example.py
+
+# Пример использования когнитивного дискуссера
+python examples/cognitive_example.py
 ```
-python manage.py runserver
-```
 
-### Деплой на Vercel
+## Требования
 
-Проект готов к деплою на Vercel. Вам понадобится:
-
-1. Fork этого репозитория на GitHub
-2. Подключите ваш репозиторий к Vercel
-3. Настройте переменные окружения в Vercel:
-   - `GENAI_API_KEY_1`: ваш ключ API для Google Gemini
-   - `SECRET_KEY`: секретный ключ для Django
-   - `VERCEL_DEPLOYMENT`: True
-   - Добавьте все переменные Firebase, указанные выше
-   - `FIREBASE_SERVICE_ACCOUNT`: содержимое файла сервисного аккаунта Firebase в формате JSON
-
-## Структура проекта
-
-- `ai_discussion/` - Основное приложение Django
-- `characters/` - Файлы с описаниями характеров AI участников
-- `discusser_settings.json` - Настройки AI участников
-- `utils/` - Утилиты для Firebase, аутентификации и других функций
-
-## Особенности работы
-
-- Неавторизованные пользователи могут создавать обсуждения, но они не сохраняются между сессиями
-- Авторизованные пользователи имеют доступ к истории своих обсуждений
-- Обсуждения сохраняются как в БД Django, так и в Firestore для синхронизации между устройствами
-- Поддерживается вход через Email/Password и через Google
-
-## Лицензия
-
-MIT
+- Python 3.8+
+- Библиотеки: aiogram, asyncio, django, autogen-agentchat
+- API ключи для соответствующих сервисов (Google Gemini, OpenAI и т.д.)
