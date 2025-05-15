@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-
+from dotenv import load_dotenv
 # Add parent directory to path to import modules
 import sys
 parent_dir = Path(__file__).resolve().parent.parent
@@ -14,6 +14,8 @@ from ai_discussion.discusser_base import BaseDiscusser
 from ai_discussion.discusser_factory import DiscusserFactory
 from ai_discussion.discusser import Discusser
 from ai_discussion.simple_discusser import SimpleDiscusser
+
+load_dotenv("C:/Users/user/Desktop/AI_Discussion/ai_discussion/.env")
 
 # Set up logging
 logging.basicConfig(

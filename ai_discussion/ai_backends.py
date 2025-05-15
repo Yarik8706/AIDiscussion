@@ -46,75 +46,28 @@ class GeminiBackend(AIBackend):
         self.agent_name = agent_name
         self.context = context
         self.model = model
-        self.agent = None
+        self.genai_client = None
         self.model_client = None
         
     async def initialize(self) -> None:
-        """Initialize the Gemini backend with AutoGen."""
-        from autogen_agentchat.agents import AssistantAgent
-        from autogen_core.models import ModelInfo
-        from autogen_ext.models.openai import OpenAIChatCompletionClient
-        
-        # Initialize OpenAI-compatible client for Gemini
-        self.model_client = OpenAIChatCompletionClient(
-            model=self.model,
-            api_key=self.api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model_info=ModelInfo(
-                vision=False,  # Adjust based on model capabilities
-                max_tokens=4096,
-                max_input_tokens=8192,
-                max_output_tokens=2048,
-                function_calling=True,    # Required field
-                json_output=True,         # Required field
-                family="google",          # Specify the model family
-                structured_output=True    # Required field
-            ),
-        )
-        
-        # Create agent with the correct parameter (model_client, not llm)
-        self.agent = AssistantAgent(
-            name=self.agent_name,
-            model_client=self.model_client,
-            system_message=self.context  # Set the context as system message
-        )
-    
-    def _extract_response_text(self, task_result):
-        """Extract clean text from the TaskResult object."""
+        """Initialize the Gemini backend with Google's generative AI API."""
         try:
-            # If it's already a string, return it
-            if isinstance(task_result, str):
-                return task_result
+            import google.generativeai as genai
             
-            # Handle TaskResult objects based on AutoGen documentation
-            # TaskResult contains messages and stopreason
-            if hasattr(task_result, 'messages') and task_result.messages:
-                # Get the last message from the agent
-                for message in reversed(task_result.messages):
-                    # Look for the agent's message (usually the last one from our agent)
-                    if hasattr(message, 'source') and message.source == self.agent_name:
-                        if hasattr(message, 'content'):
-                            return message.content
+            # Configure the API
+            genai.configure(api_key=self.api_key)
             
-            # If we couldn't extract using the structured approach, try converting to string
-            text = str(task_result)
+            # Generate content using the model
+            self.genai_client = genai
+            self.model_client = genai.GenerativeModel(self.model)
             
-            # Clean up the response by removing metadata and technical details
-            text = re.sub(r'messages=\[.*?\]', '', text, flags=re.DOTALL)
-            text = re.sub(r'TextMessage\(.*?\)', '', text, flags=re.DOTALL)
-            text = re.sub(r'source=\'.*?\'', '', text)
-            text = re.sub(r'modelsusage=.*?,', '', text)
-            text = re.sub(r'metadata=\{\},', '', text)
-            text = re.sub(r'type=\'TextMessage\'', '', text)
-            text = re.sub(r'stopreason=.*', '', text)
-            text = re.sub(r'content=\'(.*?)\'', r'\1', text)
-            text = re.sub(r'[\[\],()]', '', text)
-            text = re.sub(r'\s+', ' ', text).strip()
+            # Ensure the system context is initialized
+            self._initialization_test = await self.generate_response("Initialization test")
             
-            return text
+        except ImportError:
+            raise ImportError("Google generative AI package is required. Install it with 'pip install google-generativeai'.")
         except Exception as e:
-            print(f"Error extracting response: {e}")
-            return str(task_result)
+            raise RuntimeError(f"Failed to initialize Gemini backend: {str(e)}")
     
     async def generate_response(self, prompt: str, discussion_history: Optional[List[str]] = None) -> str:
         """Generate a response using the Gemini model.
@@ -134,21 +87,25 @@ class GeminiBackend(AIBackend):
             else:
                 full_prompt = prompt
             
-            # Pass prompt as a named parameter 'task', not as a positional parameter
-            task_result = await self.agent.run(task=full_prompt)
-            response = self._extract_response_text(task_result)
-            return response
+            # Prepare the message with system context
+            system_message = f"{self.context}\n\nИнструкция: {full_prompt}"
+            
+            # Generate response
+            response = await self.model_client.generate_content_async(system_message)
+            
+            if hasattr(response, 'text'):
+                return response.text
+            
+            # Fallback
+            return str(response)
         except Exception as e:
             print(f"Error in generate_response: {e}")
             return f"Error: {str(e)}"
     
     async def close(self) -> None:
         """Close the model client."""
-        if hasattr(self, 'model_client'):
-            try:
-                await self.model_client.close()
-            except:
-                pass
+        # No explicit close method for Google's generative AI client
+        pass
 
 
 class OpenAIBackend(AIBackend):
