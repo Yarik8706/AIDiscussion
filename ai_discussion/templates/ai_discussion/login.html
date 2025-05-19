@@ -82,11 +82,11 @@
                         <div class="alert alert-danger d-none" id="login-error"></div>
                         <div class="mb-3">
                             <label for="login-email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="login-email" required>
+                            <input type="email" class="form-control" id="login-email" name="email" autocomplete="email" required>
                         </div>
                         <div class="mb-3">
                             <label for="login-password" class="form-label">Пароль</label>
-                            <input type="password" class="form-control" id="login-password" required>
+                            <input type="password" class="form-control" id="login-password" name="password" autocomplete="current-password" required>
                         </div>
                         <button type="button" id="login-button" class="btn btn-primary w-100">Войти</button>
                         
@@ -105,21 +105,30 @@
                         <div class="alert alert-danger d-none" id="register-error"></div>
                         <div class="mb-3">
                             <label for="register-email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="register-email" required>
+                            <input type="email" class="form-control" id="register-email" name="email" autocomplete="email" required>
                         </div>
                         <div class="mb-3">
                             <label for="register-password" class="form-label">Пароль</label>
-                            <input type="password" class="form-control" id="register-password" required>
+                            <input type="password" class="form-control" id="register-password" name="new-password" autocomplete="new-password" required>
                         </div>
                         <div class="mb-3">
                             <label for="register-password-confirm" class="form-label">Подтверждение пароля</label>
-                            <input type="password" class="form-control" id="register-password-confirm" required>
+                            <input type="password" class="form-control" id="register-password-confirm" name="new-password-confirm" autocomplete="new-password" required>
                         </div>
                         <button type="button" id="register-button" class="btn btn-primary w-100">Зарегистрироваться</button>
                     </div>
 
                     <!-- Отладочная информация -->
                     <div id="debug-output" class="mt-4"></div>
+                    
+                    <!-- Отладочные кнопки -->
+                    <div class="mt-3 pt-3 border-top">
+                        <h5>Отладочные действия</h5>
+                        <div class="d-flex gap-2">
+                            <button id="check-auth-btn" class="btn btn-sm btn-outline-secondary">Проверить аутентификацию</button>
+                            <button id="clear-debug-btn" class="btn btn-sm btn-outline-danger">Очистить отладку</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -145,6 +154,28 @@ debug(`Конфигурация: API_KEY ${typeof firebaseConfig !== 'undefined'
 
 document.addEventListener('DOMContentLoaded', function() {
     debug("DOM полностью загружен");
+    
+    // Ensure Firebase is available
+    function waitForFirebase(callback, maxAttempts = 10) {
+        let attempts = 0;
+        
+        function checkFirebase() {
+            attempts++;
+            if (typeof firebase !== 'undefined' && firebase.auth) {
+                debug("Firebase доступен, продолжаем");
+                callback();
+                return;
+            } else if (attempts < maxAttempts) {
+                debug(`Firebase еще не инициализирован, попытка ${attempts}/${maxAttempts}`);
+                setTimeout(checkFirebase, 200);
+            } else {
+                debug("Firebase не инициализирован после всех попыток");
+                showError(loginError, "Ошибка загрузки Firebase SDK. Перезагрузите страницу.");
+            }
+        }
+        
+        checkFirebase();
+    }
     
     // UI элементы
     const loginTab = document.getElementById('login-tab');
@@ -206,24 +237,33 @@ document.addEventListener('DOMContentLoaded', function() {
         debug(`Попытка входа с email: ${email}`);
         hideError(loginError);
         
-        try {
-            firebase.auth().signInWithEmailAndPassword(email, password)
-                .then((userCredential) => {
-                    debug("Вход успешен, получение токена");
-                    userCredential.user.getIdToken().then(token => {
-                        localStorage.setItem('firebaseToken', token);
-                        debug("Токен сохранен, перенаправление");
-                        window.location.href = '{% url "ai_discussion:home" %}';
+        waitForFirebase(() => {
+            try {
+                // Log Firebase config for debugging
+                debug("Firebase config: " + JSON.stringify(firebaseConfig));
+                
+                firebase.auth().signInWithEmailAndPassword(email, password)
+                    .then((userCredential) => {
+                        debug("Вход успешен, получение токена");
+                        userCredential.user.getIdToken().then(token => {
+                            localStorage.setItem('firebaseToken', token);
+                            debug("Токен сохранен, перенаправление");
+                            
+                            // Ensure we don't get caught in a refresh loop
+                            sessionStorage.setItem('userSessionChecked', 'true');
+                            
+                            window.location.href = '{% url "ai_discussion:home" %}';
+                        });
+                    })
+                    .catch((error) => {
+                        debug(`Ошибка входа: ${error.code} - ${error.message}`);
+                        showError(loginError, error.message);
                     });
-                })
-                .catch((error) => {
-                    debug(`Ошибка входа: ${error.code} - ${error.message}`);
-                    showError(loginError, error.message);
-                });
-        } catch (error) {
-            debug(`Критическая ошибка при входе: ${error.message}`);
-            showError(loginError, "Произошла ошибка при попытке входа");
-        }
+            } catch (error) {
+                debug(`Критическая ошибка при входе: ${error.message}`);
+                showError(loginError, "Произошла ошибка при попытке входа");
+            }
+        });
     });
 
     // Регистрация
@@ -249,86 +289,153 @@ document.addEventListener('DOMContentLoaded', function() {
         
         debug(`Попытка регистрации с email: ${email}`);
         
-        try {
-            firebase.auth().createUserWithEmailAndPassword(email, password)
-                .then((userCredential) => {
-                    debug("Регистрация успешна, получение токена");
-                    userCredential.user.getIdToken().then(token => {
-                        localStorage.setItem('firebaseToken', token);
-                        debug("Токен сохранен, перенаправление");
-                        window.location.href = '{% url "ai_discussion:home" %}';
+        waitForFirebase(() => {
+            try {
+                // Log Firebase config for debugging
+                debug("Firebase config: " + JSON.stringify(firebaseConfig));
+                
+                firebase.auth().createUserWithEmailAndPassword(email, password)
+                    .then((userCredential) => {
+                        debug("Регистрация успешна, получение токена");
+                        // Отмечаем, что пользователь только что зарегистрировался
+                        sessionStorage.setItem('justSignedIn', 'true');
+                        
+                        userCredential.user.getIdToken().then(token => {
+                            localStorage.setItem('firebaseToken', token);
+                            debug("Токен сохранен, перенаправление");
+                            
+                            // Ensure we don't get caught in a refresh loop
+                            sessionStorage.setItem('userSessionChecked', 'true');
+                            
+                            window.location.href = '{% url "ai_discussion:home" %}';
+                        });
+                    })
+                    .catch((error) => {
+                        debug(`Ошибка регистрации: ${error.code} - ${error.message}`);
+                        showError(registerError, error.message);
                     });
-                })
-                .catch((error) => {
-                    debug(`Ошибка регистрации: ${error.code} - ${error.message}`);
-                    showError(registerError, error.message);
-                });
-        } catch (error) {
-            debug(`Критическая ошибка при регистрации: ${error.message}`);
-            showError(registerError, "Произошла ошибка при попытке регистрации");
-        }
+            } catch (error) {
+                debug(`Критическая ошибка при регистрации: ${error.message}`);
+                showError(registerError, "Произошла ошибка при попытке регистрации");
+            }
+        });
     });
 
     // Вход через Google
     googleLoginButton.addEventListener('click', () => {
         debug("Клик по кнопке входа через Google");
         
-        try {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            debug("Создан провайдер Google");
-            
-            firebase.auth().signInWithPopup(provider)
-                .then((result) => {
-                    if (result && result.user) {
-                        debug("Вход через Google успешен, получение токена");
-                        result.user.getIdToken()
-                            .then(token => {
-                                localStorage.setItem('firebaseToken', token);
-                                debug("Токен сохранен, перенаправление");
-                                window.location.href = '{% url "ai_discussion:home" %}';
-                            })
-                            .catch(tokenError => {
-                                debug(`Ошибка получения токена: ${tokenError.message}`);
-                                showError(loginError, "Не удалось получить токен авторизации");
-                            });
-                    } else {
-                        debug("Пользователь не получен после входа через Google");
-                        showError(loginError, "Не удалось получить данные пользователя");
-                    }
-                })
-                .catch((error) => {
-                    // Игнорируем ошибку закрытия окна пользователем
-                    if (error.code === "auth/popup-closed-by-user") {
-                        debug("Пользователь закрыл окно авторизации Google");
-                        return;
-                    }
-                    
-                    debug(`Ошибка входа через Google: ${error.code} - ${error.message}`);
-                    showError(loginError, error.message);
-                });
-        } catch (error) {
-            debug(`Критическая ошибка при входе через Google: ${error.message}`);
-            showError(loginError, "Произошла ошибка при попытке входа через Google");
-        }
-    });
-    
-    // Также проверяем не пришли ли мы после редиректа (на всякий случай)
-    firebase.auth().getRedirectResult()
-        .then((result) => {
-            if (result && result.user) {
-                debug("Вход через редирект успешен, получение токена");
-                result.user.getIdToken().then(token => {
-                    localStorage.setItem('firebaseToken', token);
-                    debug("Токен сохранен, перенаправление");
-                    window.location.href = '{% url "ai_discussion:home" %}';
-                });
-            }
-        })
-        .catch((error) => {
-            if (error.code !== "auth/credential-already-in-use") {
-                debug(`Ошибка получения результата редиректа: ${error.code} - ${error.message}`);
+        waitForFirebase(() => {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                debug("Создан провайдер Google");
+                
+                firebase.auth().signInWithPopup(provider)
+                    .then((result) => {
+                        if (result && result.user) {
+                            debug("Вход через Google успешен, получение токена");
+                            
+                            // Проверяем, новый ли это пользователь
+                            if (result.additionalUserInfo.isNewUser) {
+                                sessionStorage.setItem('justSignedIn', 'true');
+                                debug("Новый пользователь через Google");
+                            }
+                            
+                            result.user.getIdToken()
+                                .then(token => {
+                                    localStorage.setItem('firebaseToken', token);
+                                    debug("Токен сохранен, перенаправление");
+                                    
+                                    // Ensure we don't get caught in a refresh loop
+                                    sessionStorage.setItem('userSessionChecked', 'true');
+                                    
+                                    window.location.href = '{% url "ai_discussion:home" %}';
+                                })
+                                .catch(tokenError => {
+                                    debug(`Ошибка получения токена: ${tokenError.message}`);
+                                    showError(loginError, "Не удалось получить токен авторизации");
+                                });
+                        } else {
+                            debug("Пользователь не получен после входа через Google");
+                            showError(loginError, "Не удалось получить данные пользователя");
+                        }
+                    })
+                    .catch((error) => {
+                        // Игнорируем ошибку закрытия окна пользователем
+                        if (error.code === "auth/popup-closed-by-user") {
+                            debug("Пользователь закрыл окно авторизации Google");
+                            return;
+                        }
+                        
+                        debug(`Ошибка входа через Google: ${error.code} - ${error.message}`);
+                        showError(loginError, error.message);
+                    });
+            } catch (error) {
+                debug(`Критическая ошибка при входе через Google: ${error.message}`);
+                showError(loginError, "Произошла ошибка при попытке входа через Google");
             }
         });
+    });
+    
+    // Watch for auth changes from firebase redirect result
+    waitForFirebase(() => {
+        firebase.auth().getRedirectResult()
+            .then((result) => {
+                if (result && result.user) {
+                    debug("Вход через редирект успешен, получение токена");
+                    
+                    // Проверяем, новый ли это пользователь
+                    if (result.additionalUserInfo && result.additionalUserInfo.isNewUser) {
+                        sessionStorage.setItem('justSignedIn', 'true');
+                        debug("Новый пользователь через редирект");
+                    }
+                    
+                    result.user.getIdToken().then(token => {
+                        localStorage.setItem('firebaseToken', token);
+                        debug("Токен сохранен, перенаправление");
+                        
+                        // Ensure we don't get caught in a refresh loop
+                        sessionStorage.setItem('userSessionChecked', 'true');
+                        
+                        window.location.href = '{% url "ai_discussion:home" %}';
+                    });
+                }
+            })
+            .catch((error) => {
+                if (error.code !== "auth/credential-already-in-use") {
+                    debug(`Ошибка получения результата редиректа: ${error.code} - ${error.message}`);
+                }
+            });
+    });
+        
+    // Отладочная кнопка для проверки аутентификации
+    document.getElementById('check-auth-btn').addEventListener('click', function() {
+        debug("Проверяем состояние аутентификации...");
+        
+        // Проверить текущего пользователя Firebase
+        const currentUser = firebase.auth().currentUser;
+        debug(`Текущий пользователь Firebase: ${currentUser ? currentUser.email : 'нет'}`);
+        
+        // Проверить наличие токена в localStorage
+        const token = localStorage.getItem('firebaseToken');
+        debug(`Токен в localStorage: ${token ? 'присутствует' : 'отсутствует'}`);
+        
+        // Запрос к серверу для проверки состояния аутентификации
+        fetch('{% url "ai_discussion:auth_debug" %}')
+            .then(response => response.json())
+            .then(data => {
+                debug(`Ответ сервера: ${JSON.stringify(data, null, 2)}`);
+            })
+            .catch(error => {
+                debug(`Ошибка запроса к серверу: ${error.message}`);
+            });
+    });
+    
+    // Очистка отладочной информации
+    document.getElementById('clear-debug-btn').addEventListener('click', function() {
+        document.getElementById('debug-output').innerHTML = '';
+        debug("Отладочная информация очищена");
+    });
 });
 </script>
 {% endblock %} 

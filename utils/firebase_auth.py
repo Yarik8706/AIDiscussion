@@ -32,13 +32,38 @@ class FirebaseAuthMiddleware:
 
     def __call__(self, request):
         request.firebase_user_id = None
-        auth_header = request.headers.get('Authorization')
         
+        # 1. Check Authorization header (API requests)
+        auth_header = request.headers.get('Authorization')
         if auth_header and auth_header.startswith('Bearer '):
             id_token = auth_header.split(' ')[1]
             firebase_user_id = verify_firebase_token(id_token)
             if firebase_user_id:
                 request.firebase_user_id = firebase_user_id
+                # Add authentication debug info to request
+                request.auth_source = 'header'
+        
+        # 2. If not authenticated yet, check cookies (for browser requests)
+        if not request.firebase_user_id:
+            # Try to find the token in cookies, case-insensitive
+            firebase_token = None
+            for cookie_name, cookie_value in request.COOKIES.items():
+                if cookie_name.lower() == 'firebasetoken':
+                    firebase_token = cookie_value
+                    break
+            
+            if firebase_token:
+                firebase_user_id = verify_firebase_token(firebase_token)
+                if firebase_user_id:
+                    request.firebase_user_id = firebase_user_id
+                    # Add authentication debug info to request
+                    request.auth_source = 'cookie'
+                else:
+                    # Token was present but invalid
+                    request.auth_source = 'invalid_cookie_token'
+            else:
+                # No token found in cookies
+                request.auth_source = 'no_cookie_token'
         
         response = self.get_response(request)
         return response

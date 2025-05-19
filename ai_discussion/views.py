@@ -15,7 +15,7 @@ import json
 import logging
 import threading
 from utils.firebase_auth import firebase_auth_required
-from utils.firebase_config import get_firestore_db
+from utils.firebase_config import get_firestore_db, update_discussion_in_firestore, save_discussion_to_firestore, save_message_to_firestore
 
 # Set up logging
 logging.basicConfig(level=logging.INFO,
@@ -143,11 +143,14 @@ async def process_discussion(discussion_id, question):
         summary, messages = await run_discussion(
             participants=participants,
             question=question,
-            send_callback=save_message
+            send_callback=save_message,
+            discussion_id=discussion_id,
+            check_if_stopped=check_if_discussion_stopped
         )
         
         # Сохраняем результат
-        await update_discussion(discussion, summary, True)
+        discussion_obj = await get_discussion_by_id(discussion_id)
+        await update_discussion(discussion_obj, summary, True)
         
         # Если обсуждение привязано к пользователю, сохраняем его в Firestore
         if discussion.firebase_user_id:
@@ -162,21 +165,23 @@ async def process_discussion(discussion_id, question):
                     'summary': discussion.summary,
                     'created_at': discussion.created_at.isoformat(),
                     'completed': discussion.completed,
+                    'is_stopped': discussion.is_stopped,
                     'user_id': discussion.firebase_user_id,
                 }
                 
                 # Сохраняем в Firestore
-                db.collection('discussions').document(str(discussion.id)).set(discussion_data)
+                db.collection('users').document(discussion.firebase_user_id).collection('discussions').document(str(discussion.id)).set(discussion_data)
                 
-                # Сохраняем сообщения
-                for idx, msg in enumerate(messages):
+                # Сохраняем сообщения в Firestore
+                for idx, msg in enumerate(discussion.messages.all().order_by('created_at')):
                     message_data = {
-                        'content': msg,
-                        'created_at': timezone.now().isoformat(),
+                        'content': msg.content,
+                        'created_at': msg.created_at.isoformat(),
                         'discussion_id': discussion.id,
                         'order': idx
                     }
-                    db.collection('discussions').document(str(discussion.id)).collection('messages').add(message_data)
+                    db.collection('users').document(discussion.firebase_user_id).collection('discussions') \
+                        .document(str(discussion.id)).collection('messages').add(message_data)
                 
                 logger.info(f"Discussion {discussion_id} saved to Firestore for user {discussion.firebase_user_id}")
             except Exception as e:
@@ -204,12 +209,14 @@ def get_discussion_and_messages(discussion_id, user_id=None):
             'error': 'Unauthorized'
         }
         
-    messages = list(discussion.messages.all().order_by('created_at').values('content', 'created_at'))
+    messages = list(discussion.messages.all().order_by('created_at'))
     return {
         'status': 'completed' if discussion.completed else 'in_progress',
         'completed': discussion.completed,
+        'is_stopped': discussion.is_stopped,
         'summary': discussion.summary if discussion.completed else None,
-        'messages': messages,
+        'discussion': discussion.to_dict(),
+        'messages': [msg.to_dict() for msg in messages],
         'message_count': len(messages)
     }
 
@@ -238,17 +245,135 @@ def discussions_list(request):
 def user_discussions(request):
     """API для получения обсуждений текущего пользователя"""
     discussions = Discussion.objects.filter(firebase_user_id=request.firebase_user_id).order_by('-created_at')
-    data = []
-    for discussion in discussions:
-        data.append({
-            'id': discussion.id,
-            'question': discussion.question,
-            'summary': discussion.summary,
-            'created_at': discussion.created_at.isoformat(),
-            'completed': discussion.completed,
-        })
+    data = [discussion.to_dict() for discussion in discussions]
     return JsonResponse({'discussions': data})
 
 def user_login(request):
     """Страница входа"""
     return render(request, 'ai_discussion/login.html')
+
+@csrf_exempt
+@require_POST
+def stop_discussion(request, discussion_id):
+    """Остановить обсуждение досрочно"""
+    try:
+        discussion = get_object_or_404(Discussion, id=discussion_id)
+        
+        # Проверка доступа: только владелец может остановить обсуждение
+        if discussion.firebase_user_id and discussion.firebase_user_id != request.firebase_user_id:
+            return JsonResponse({'status': 'error', 'message': 'У вас нет доступа к этому обсуждению'}, status=403)
+        
+        # Если обсуждение уже завершено, возвращаем сообщение об этом
+        if discussion.completed:
+            return JsonResponse({'status': 'success', 'message': 'Обсуждение уже завершено'})
+            
+        # Отмечаем обсуждение как остановленное
+        discussion.is_stopped = True
+        discussion.save()
+        
+        # Обновляем в Firestore, если нужно
+        if discussion.firebase_user_id:
+            update_discussion_in_firestore(
+                discussion.firebase_user_id, 
+                str(discussion.id), 
+                {'is_stopped': True}
+            )
+            
+        return JsonResponse({'status': 'success', 'message': 'Обсуждение остановлено'})
+    except Exception as e:
+        logger.error(f"Error stopping discussion: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@sync_to_async
+def check_if_discussion_stopped(discussion_id):
+    """Проверить, было ли обсуждение остановлено"""
+    try:
+        discussion = Discussion.objects.get(id=discussion_id)
+        return discussion.is_stopped
+    except Exception as e:
+        logger.error(f"Error checking if discussion is stopped: {e}")
+        return False
+
+@csrf_exempt
+@require_POST
+@firebase_auth_required
+def migrate_local_discussions(request):
+    """Переместить локальные обсуждения из localStorage в Firestore"""
+    try:
+        data = json.loads(request.body)
+        local_discussions = data.get('discussions', [])
+        
+        if not local_discussions:
+            return JsonResponse({'status': 'success', 'message': 'Нет локальных обсуждений для миграции'})
+            
+        user_id = request.firebase_user_id
+        migrated_count = 0
+        
+        for local_discussion in local_discussions:
+            try:
+                # Создаем обсуждение в базе данных
+                question = local_discussion.get('question', 'Без вопроса')
+                summary = local_discussion.get('summary')
+                
+                discussion = Discussion.objects.create(
+                    question=question,
+                    summary=summary,
+                    firebase_user_id=user_id,
+                    completed=True
+                )
+                
+                # Сохраняем сообщения, если они есть
+                messages = local_discussion.get('messages', [])
+                for message in messages:
+                    Message.objects.create(
+                        discussion=discussion,
+                        content=message.get('content', '')
+                    )
+                
+                # Сохраняем в Firestore
+                discussion_data = {
+                    'id': discussion.id,
+                    'question': discussion.question,
+                    'summary': discussion.summary,
+                    'created_at': discussion.created_at.isoformat(),
+                    'completed': discussion.completed,
+                    'user_id': user_id,
+                }
+                
+                # Сохраняем обсуждение
+                save_discussion_to_firestore(user_id, discussion_data)
+                
+                # Сохраняем сообщения
+                for idx, msg in enumerate(messages):
+                    message_data = {
+                        'content': msg.get('content', ''),
+                        'created_at': timezone.now().isoformat(),
+                        'discussion_id': discussion.id,
+                        'order': idx
+                    }
+                    save_message_to_firestore(user_id, str(discussion.id), message_data)
+                
+                migrated_count += 1
+            except Exception as discussion_error:
+                logger.error(f"Error migrating discussion: {discussion_error}")
+                
+        return JsonResponse({
+            'status': 'success', 
+            'message': f'Перенесено {migrated_count} из {len(local_discussions)} обсуждений'
+        })
+    except Exception as e:
+        logger.error(f"Error migrating local discussions: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@csrf_exempt
+def auth_debug(request):
+    """Отладочная информация об аутентификации"""
+    data = {
+        'is_authenticated': request.firebase_user_id is not None,
+        'user_id': request.firebase_user_id,
+        'auth_source': getattr(request, 'auth_source', None),
+        'headers': {k: v for k, v in request.headers.items() if k.lower() in ['authorization', 'cookie']},
+        'cookies': {k: v for k, v in request.COOKIES.items() if k.lower() in ['firebasetoken']},
+    }
+    
+    return JsonResponse(data)

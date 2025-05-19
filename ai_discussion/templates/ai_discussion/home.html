@@ -3,126 +3,195 @@
 {% block title %}Главная - AI Дискуссии{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card mb-4">
-            <div class="card-body text-center p-5">
-                <h1 class="display-5 mb-4">Задайте вопрос AI участникам</h1>
-                <p class="lead mb-4">Наша система организует дискуссию между несколькими AI участниками с разными характерами и взглядами, которые обсудят ваш вопрос.</p>
+<div class="row">
+    <div class="col-md-8 mb-4">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title mb-4">Новая дискуссия</h2>
                 
-                {% if is_authenticated %}
-                <div class="alert alert-success mb-4">
-                    <i class="fas fa-check-circle me-2"></i> Вы авторизованы! Ваши обсуждения будут сохранены в вашем аккаунте и доступны на всех устройствах.
+                <div id="discussion-form">
+                    <div class="mb-3">
+                        <label for="question" class="form-label">Ваш вопрос или тема для обсуждения</label>
+                        <textarea class="form-control" id="question" rows="3" placeholder="Введите вопрос или тему для обсуждения между AI..."></textarea>
+                    </div>
+                    <button id="start-discussion" class="btn btn-primary">Начать обсуждение</button>
+                </div>
+                
+                <div id="loading-container" class="text-center py-5 d-none">
+                    <div class="loader mb-3"></div>
+                    <p class="text-muted">Начинаем обсуждение, пожалуйста подождите...</p>
+                </div>
+                
+                <div id="error-container" class="alert alert-danger mt-3 d-none"></div>
+            </div>
+        </div>
+        
+        <!-- Debug Auth Status Panel -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Debug Info - Authentication Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6>Server status:</h6>
+                    <p>
+                        Is Authenticated (server): <span class="badge {% if is_authenticated %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ is_authenticated|yesno:"Yes,No" }}
+                        </span>
+                    </p>
+                    {% if is_authenticated %}
+                    <p>User ID: {{ request.firebase_user_id }}</p>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <h6>Client status:</h6>
+                    <div id="client-auth-status">Loading...</div>
+                </div>
+                <div class="mb-3">
+                    <button id="check-auth-status" class="btn btn-sm btn-primary">Check Auth Status</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-body">
+                <h3 class="card-title mb-3">Последние обсуждения</h3>
+                
+                {% if discussions %}
+                <div class="list-group">
+                    {% for discussion in discussions %}
+                    <a href="{% url 'ai_discussion:discussion_detail' discussion.id %}" class="list-group-item list-group-item-action flex-column align-items-start">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1 text-truncate">{{ discussion.question|truncatechars:50 }}</h5>
+                            <small class="text-muted">{{ discussion.created_at|date:"d.m.Y" }}</small>
+                        </div>
+                        {% if discussion.completed %}
+                            <p class="mb-1 text-truncate">{{ discussion.summary|default:"Без итога"|truncatechars:100 }}</p>
+                            <small class="text-success">Завершено</small>
+                        {% else %}
+                            <p class="mb-1 text-muted">Обсуждение в процессе...</p>
+                            <small class="text-warning">В процессе</small>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <a href="{% url 'ai_discussion:discussions_list' %}" class="btn btn-outline-primary btn-sm">Все обсуждения</a>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-4">
-                    <i class="fas fa-info-circle me-2"></i> <a href="{% url 'ai_discussion:login' %}" class="alert-link">Войдите</a> в систему, чтобы ваши обсуждения сохранялись в вашем аккаунте и были доступны на всех устройствах.
-                </div>
+                <p class="text-muted">У вас пока нет обсуждений</p>
                 {% endif %}
-                
-                <form id="questionForm" class="mb-4">
-                    <div class="form-group mb-3">
-                        <textarea id="questionInput" class="form-control form-control-lg" rows="3" placeholder="Введите ваш вопрос здесь..." required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-lg px-5">
-                        <i class="fas fa-comments me-2"></i>Начать обсуждение
-                    </button>
-                </form>
-                
-                <div id="loadingIndicator" class="text-center my-4 d-none">
-                    <div class="loader"></div>
-                    <p class="mt-3">Создаем новое обсуждение...</p>
-                </div>
             </div>
         </div>
-        
-        {% if discussions %}
-        <h2 class="mb-4">{% if is_authenticated %}Ваши недавние обсуждения{% else %}Недавние обсуждения{% endif %}</h2>
-        <div class="row">
-            {% for discussion in discussions %}
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ discussion.question|truncatechars:80 }}</h5>
-                        <p class="card-text text-muted">{{ discussion.created_at|date:"d.m.Y H:i" }}</p>
-                        <div class="text-end">
-                            <a href="{% url 'ai_discussion:discussion_detail' discussion.id %}" class="btn btn-outline-primary discussion-btn">
-                                <i class="fas fa-eye me-1"></i>Посмотреть
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        
-        {% if is_authenticated %}
-        <div class="text-center mt-3">
-            <a href="{% url 'ai_discussion:discussions_list' %}" class="btn btn-outline-secondary">
-                <i class="fas fa-list me-1"></i>Посмотреть все ваши обсуждения
-            </a>
-        </div>
-        {% endif %}
-        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const questionForm = document.getElementById('questionForm');
-    const loadingIndicator = document.getElementById('loadingIndicator');
-
-    questionForm.addEventListener('submit', function(e) {
-        e.preventDefault();
+    document.addEventListener('DOMContentLoaded', function() {
+        // Elements
+        const startBtn = document.getElementById('start-discussion');
+        const questionInput = document.getElementById('question');
+        const discussionForm = document.getElementById('discussion-form');
+        const loadingContainer = document.getElementById('loading-container');
+        const errorContainer = document.getElementById('error-container');
+        const clientAuthStatus = document.getElementById('client-auth-status');
+        const checkAuthBtn = document.getElementById('check-auth-status');
         
-        const question = document.getElementById('questionInput').value.trim();
-        if (!question) return;
-        
-        // Show loading
-        questionForm.classList.add('d-none');
-        loadingIndicator.classList.remove('d-none');
-        
-        // Get Firebase token for authentication
-        const token = localStorage.getItem('firebaseToken');
-        const headers = {
-            'Content-Type': 'application/json',
-        };
-        
-        // Add authentication token if available
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
+        // Check if elements exist
+        if (!startBtn || !questionInput) {
+            console.error("Required elements not found");
+            return;
         }
         
-        // Submit question via API
-        fetch('{% url "ai_discussion:start_discussion" %}', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({
-                question: question
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Ошибка запроса');
+        // Start discussion
+        startBtn.addEventListener('click', function() {
+            const question = questionInput.value.trim();
+            if (!question) {
+                showError("Пожалуйста, введите вопрос или тему для обсуждения");
+                return;
             }
-            return response.json();
-        })
-        .then(data => {
-            if (data.redirect_url) {
-                window.location.href = data.redirect_url;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Произошла ошибка при создании обсуждения. Пожалуйста, попробуйте снова.');
             
-            // Hide loading, show form again
-            questionForm.classList.remove('d-none');
-            loadingIndicator.classList.add('d-none');
+            // Show loading state
+            discussionForm.classList.add('d-none');
+            loadingContainer.classList.remove('d-none');
+            errorContainer.classList.add('d-none');
+            
+            // Send request to start discussion
+            fetch('{% url "ai_discussion:start_discussion" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ question })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Redirect to discussion page
+                    window.location.href = data.redirect_url;
+                } else {
+                    showError(data.message || "Произошла ошибка при создании обсуждения");
+                }
+            })
+            .catch(error => {
+                console.error("Error starting discussion:", error);
+                showError("Произошла ошибка при создании обсуждения");
+            })
+            .finally(() => {
+                // Restore form state if there was an error
+                discussionForm.classList.remove('d-none');
+                loadingContainer.classList.add('d-none');
+            });
         });
+        
+        function showError(message) {
+            errorContainer.textContent = message;
+            errorContainer.classList.remove('d-none');
+        }
+        
+        // Debug: Check auth status
+        function updateClientAuthStatus() {
+            const currentUser = firebase.auth().currentUser;
+            const token = localStorage.getItem('firebaseToken');
+            const cookie = document.cookie.includes('firebaseToken');
+            
+            let html = `
+                <p>Firebase User: <span class="badge ${currentUser ? 'bg-success' : 'bg-danger'}">${currentUser ? currentUser.email : 'None'}</span></p>
+                <p>Local Storage Token: <span class="badge ${token ? 'bg-success' : 'bg-danger'}">${token ? 'Present' : 'Missing'}</span></p>
+                <p>Cookie Token: <span class="badge ${cookie ? 'bg-success' : 'bg-danger'}">${cookie ? 'Present' : 'Missing'}</span></p>
+            `;
+            
+            clientAuthStatus.innerHTML = html;
+        }
+        
+        if (checkAuthBtn) {
+            checkAuthBtn.addEventListener('click', function() {
+                updateClientAuthStatus();
+                
+                // Also check with server
+                fetch('{% url "ai_discussion:auth_debug" %}')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log("Server auth status:", data);
+                        const serverInfo = document.createElement('div');
+                        serverInfo.innerHTML = `
+                            <h6 class="mt-3">Server response:</h6>
+                            <pre class="bg-light p-2" style="max-height: 200px; overflow: auto">${JSON.stringify(data, null, 2)}</pre>
+                        `;
+                        clientAuthStatus.appendChild(serverInfo);
+                    })
+                    .catch(error => {
+                        console.error("Error checking auth status:", error);
+                    });
+            });
+        }
+        
+        // Update client auth status on load
+        updateClientAuthStatus();
     });
-});
 </script>
 {% endblock %} 

@@ -57,6 +57,26 @@
     </div>
 </div>
 
+<!-- Модальное окно подтверждения остановки -->
+<div class="modal fade" id="stopModal" tabindex="-1" aria-labelledby="stopModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="stopModalLabel">Подтверждение остановки</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы действительно хотите остановить это обсуждение?</p>
+                <p class="text-warning">Обсуждение будет завершено с текущими результатами.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-warning" id="confirm-stop-btn">Остановить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if discussion.completed and discussion.summary %}
 <div class="card mb-5 border-success">
     <div class="card-header bg-success text-white">
@@ -71,11 +91,16 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0">Ход обсуждения</h3>
     {% if not discussion.completed %}
-    <div id="discussion-status" class="d-flex align-items-center">
-        <div class="spinner-border text-primary me-2" role="status">
-            <span class="visually-hidden">Загрузка...</span>
+    <div>
+        <button id="stop-discussion-btn" class="btn btn-warning me-3" data-bs-toggle="modal" data-bs-target="#stopModal">
+            <i class="fas fa-stop me-1"></i>Остановить
+        </button>
+        <div id="discussion-status" class="d-inline-flex align-items-center">
+            <div class="spinner-border text-primary me-2" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <span>Обсуждение в процессе...</span>
         </div>
-        <span>Обсуждение в процессе...</span>
     </div>
     {% endif %}
 </div>
@@ -112,6 +137,74 @@ document.addEventListener('DOMContentLoaded', function() {
     const messagesContainer = document.getElementById('messages-container');
     const discussionStatus = document.getElementById('discussion-status');
     const noMessages = document.getElementById('no-messages');
+    const stopDiscussionBtn = document.getElementById('stop-discussion-btn');
+    const confirmStopBtn = document.getElementById('confirm-stop-btn');
+    
+    // Function to get CSRF token
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
+    
+    // Function to stop discussion
+    confirmStopBtn.addEventListener('click', function() {
+        // Disable button
+        confirmStopBtn.disabled = true;
+        confirmStopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Останавливаем...';
+        
+        // Get Firebase token for authentication
+        const token = localStorage.getItem('firebaseToken');
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        
+        // Add authentication token if available
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Call API to stop discussion
+        fetch('{% url "ai_discussion:stop_discussion" discussion.id %}', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Hide modal
+                const stopModal = bootstrap.Modal.getInstance(document.getElementById('stopModal'));
+                stopModal.hide();
+                
+                // Update UI
+                stopDiscussionBtn.disabled = true;
+                stopDiscussionBtn.innerHTML = '<i class="fas fa-check me-1"></i>Обсуждение останавливается...';
+                
+                // Add system message
+                const messageCard = document.createElement('div');
+                messageCard.className = 'card message-card mb-3 fade-in bg-warning-subtle';
+                messageCard.innerHTML = `
+                    <div class="card-body">
+                        <b>Система:</b> Обсуждение остановлено по запросу пользователя. Ожидаем завершения...
+                    </div>
+                `;
+                messagesContainer.appendChild(messageCard);
+                
+                // Scroll to bottom
+                window.scrollTo(0, document.body.scrollHeight);
+            } else {
+                alert('Ошибка при остановке обсуждения: ' + data.message);
+                confirmStopBtn.disabled = false;
+                confirmStopBtn.innerHTML = 'Остановить';
+            }
+        })
+        .catch(error => {
+            console.error('Error stopping discussion:', error);
+            alert('Произошла ошибка при остановке обсуждения');
+            confirmStopBtn.disabled = false;
+            confirmStopBtn.innerHTML = 'Остановить';
+        });
+    });
     
     // Function to check discussion status
     function checkStatus() {
@@ -129,6 +222,14 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
+            // If discussion is stopped but not completed
+            if (data.is_stopped && !data.completed) {
+                if (stopDiscussionBtn && !stopDiscussionBtn.disabled) {
+                    stopDiscussionBtn.disabled = true;
+                    stopDiscussionBtn.innerHTML = '<i class="fas fa-check me-1"></i>Обсуждение останавливается...';
+                }
+            }
+            
             // If new messages
             if (data.message_count > messageCount) {
                 // Remove no messages placeholder if exists
@@ -158,7 +259,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if discussion completed
             if (data.completed) {
                 // Update status
-                discussionStatus.remove();
+                if (discussionStatus) {
+                    discussionStatus.remove();
+                }
+                if (stopDiscussionBtn) {
+                    stopDiscussionBtn.remove();
+                }
                 
                 // Add summary if not already exists
                 if (data.summary && !document.querySelector('.border-success')) {

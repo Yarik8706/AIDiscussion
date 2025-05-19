@@ -1,13 +1,20 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AI Дискуссии{% endblock %}</title>
+    <title>{% block title %}AI Discussion{% endblock %}</title>
+    
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    
     <style>
         body {
             background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
@@ -70,123 +77,171 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white">
+    <header class="bg-dark text-white py-3">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="{% url 'ai_discussion:home' %}">
-                <i class="fas fa-robot me-2"></i>AI Дискуссии
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'ai_discussion:home' %}">Главная</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'ai_discussion:discussions_list' %}">Все обсуждения</a>
-                    </li>
-                    <li class="nav-item" id="auth-link-container">
-                        <!-- This will be populated by JavaScript based on authentication state -->
-                    </li>
-                </ul>
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="{% url 'ai_discussion:home' %}" class="text-white text-decoration-none">
+                    <h1 class="h3 mb-0">AI Discussion</h1>
+                </a>
+                <div>
+                    {% if is_authenticated %}
+                    <span class="me-3">
+                        <i class="fas fa-user me-1"></i> 
+                        <span id="user-email"></span>
+                    </span>
+                    <button class="btn btn-outline-light btn-sm" id="logout-btn">
+                        <i class="fas fa-sign-out-alt me-1"></i> Выйти
+                    </button>
+                    {% else %}
+                    <a href="{% url 'ai_discussion:login' %}" class="btn btn-outline-light btn-sm">
+                        <i class="fas fa-sign-in-alt me-1"></i> Войти
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <nav class="bg-light py-2">
+        <div class="container">
+            <div class="d-flex">
+                <a href="{% url 'ai_discussion:home' %}" class="me-3 text-decoration-none">
+                    <i class="fas fa-home me-1"></i> Главная
+                </a>
+                <a href="{% url 'ai_discussion:discussions_list' %}" class="text-decoration-none">
+                    <i class="fas fa-list me-1"></i> {% if is_authenticated %}Ваши обсуждения{% else %}Обсуждения{% endif %}
+                </a>
             </div>
         </div>
     </nav>
-
-    <!-- Main content -->
-    <div class="container py-4">
+    
+    <main class="container py-4">
         {% block content %}{% endblock %}
-    </div>
-
-    <!-- Footer -->
-    <footer class="bg-white py-4 mt-5">
+    </main>
+    
+    <footer class="bg-dark text-white py-3 mt-5">
         <div class="container text-center">
-            <p class="mb-0 text-muted">AI Дискуссионная система &copy; {% now "Y" %}</p>
+            <p class="mb-0">&copy; 2025 AI Discussion</p>
         </div>
     </footer>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     
-    <!-- Firebase Core JS (needed on all pages) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
+    <!-- Firebase App (the core Firebase SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.8/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.8/firebase-auth-compat.js"></script>
+    
+    <!-- Firebase Config and initialization (MUST be before other scripts) -->
     <script>
-    // Firebase конфигурация (загружается из переменных окружения через Django-контекст)
-    const firebaseConfig = {
-        apiKey: "{{ FIREBASE_API_KEY|default:'YOUR_API_KEY' }}",
-        authDomain: "{{ FIREBASE_AUTH_DOMAIN|default:'YOUR_AUTH_DOMAIN' }}",
-        projectId: "{{ FIREBASE_PROJECT_ID|default:'YOUR_PROJECT_ID' }}",
-        storageBucket: "{{ FIREBASE_STORAGE_BUCKET|default:'YOUR_STORAGE_BUCKET' }}",
-        messagingSenderId: "{{ FIREBASE_MESSAGING_SENDER_ID|default:'YOUR_MESSAGING_SENDER_ID' }}",
-        appId: "{{ FIREBASE_APP_ID|default:'YOUR_APP_ID' }}"
-    };
-    
-    // Инициализация Firebase
-    if (!firebase.apps.length) {
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.apiKey }}",
+            authDomain: "{{ firebase_config.authDomain }}",
+            projectId: "{{ firebase_config.projectId }}",
+            storageBucket: "{{ firebase_config.storageBucket }}",
+            messagingSenderId: "{{ firebase_config.messagingSenderId }}",
+            appId: "{{ firebase_config.appId }}"
+        };
+        
+        console.log("Firebase config:", firebaseConfig);
+        
+        // Initialize Firebase immediately
         firebase.initializeApp(firebaseConfig);
-    }
+        console.log("Firebase initialized directly");
+    </script>
     
-    // Добавление токена к запросам
-    const addTokenToRequest = (xhr) => {
-        const token = localStorage.getItem('firebaseToken');
-        if (token) {
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        }
-    };
+    <!-- Custom LocalStorage Manager -->
+    <script src="{% static 'js/local-storage-manager.js' %}"></script>
     
-    // Перехватываем все AJAX-запросы и добавляем токен
-    $(document).ajaxSend(function(event, xhr, settings) {
-        addTokenToRequest(xhr);
-    });
+    <!-- Auth Helper - Adds token to all AJAX requests -->
+    <script src="{% static 'js/auth-helper.js' %}"></script>
     
-    // Функция для обновления UI на основе состояния аутентификации
-    const updateAuthUI = (user) => {
-        const authLinkContainer = document.getElementById('auth-link-container');
-        if (user) {
-            // Пользователь авторизован
-            authLinkContainer.innerHTML = `
-                <a class="nav-link btn btn-outline-primary btn-sm" href="#" id="logout-button">
-                    <i class="fas fa-sign-out-alt me-1"></i>Выйти
-                </a>
-            `;
-            // Добавляем обработчик для кнопки выхода
-            document.getElementById('logout-button').addEventListener('click', (e) => {
-                e.preventDefault();
-                firebase.auth().signOut().then(() => {
-                    localStorage.removeItem('firebaseToken');
-                    window.location.href = "{% url 'ai_discussion:home' %}";
+    <!-- Additional Firebase script -->
+    <script>
+        // Check if user is already stored in session to avoid unnecessary page refreshes
+        var userSessionChecked = sessionStorage.getItem('userSessionChecked');
+        
+        // Auth state change listener
+        firebase.auth().onAuthStateChanged(function(user) {
+            console.log("Auth state changed:", user ? "User signed in" : "User signed out");
+            
+            if (user) {
+                // User is signed in
+                console.log("User email:", user.email);
+                
+                // Store status in session to prevent circular refreshes
+                sessionStorage.setItem('userSessionChecked', 'true');
+                
+                user.getIdToken().then(function(token) {
+                    console.log("Got token for auth state");
+                    localStorage.setItem('firebaseToken', token);
+                    
+                    // Set user email if element exists
+                    const userEmailElement = document.getElementById('user-email');
+                    if (userEmailElement) {
+                        userEmailElement.textContent = user.email;
+                    }
+                    
+                    // We only refresh if this is the first time we detect a logged-in state
+                    var isAuthenticated = false;
+                    {% if is_authenticated %}
+                        isAuthenticated = true;
+                    {% endif %}
+                    
+                    if (!isAuthenticated && !userSessionChecked) {
+                        console.log('First detection of authenticated user - refreshing once');
+                        window.location.reload();
+                    }
                 });
-            });
-        } else {
-            // Пользователь не авторизован
-            authLinkContainer.innerHTML = `
-                <a class="nav-link btn btn-primary btn-sm" href="{% url 'ai_discussion:login' %}">
-                    <i class="fas fa-sign-in-alt me-1"></i>Войти
-                </a>
-            `;
-        }
-    };
-    
-    // Слушаем изменения состояния аутентификации
-    firebase.auth().onAuthStateChanged((user) => {
-        if (user) {
-            // Пользователь авторизован
-            user.getIdToken().then(token => {
-                localStorage.setItem('firebaseToken', token);
-                updateAuthUI(user);
-            });
-        } else {
-            // Пользователь не авторизован
-            localStorage.removeItem('firebaseToken');
-            updateAuthUI(null);
-        }
-    });
+                
+                // Handle logout button
+                const logoutBtn = document.getElementById('logout-btn');
+                if (logoutBtn) {
+                    logoutBtn.addEventListener('click', function() {
+                        // Clear session check before logout
+                        sessionStorage.removeItem('userSessionChecked');
+                        
+                        firebase.auth().signOut().then(function() {
+                            localStorage.removeItem('firebaseToken');
+                            document.cookie = 'firebaseToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                            window.location.href = "{% url 'ai_discussion:home' %}";
+                        }).catch(function(error) {
+                            console.error('Error signing out:', error);
+                        });
+                    });
+                }
+                
+                // If user just signed in, migrate local discussions
+                const justSignedIn = sessionStorage.getItem('justSignedIn');
+                if (justSignedIn) {
+                    sessionStorage.removeItem('justSignedIn');
+                    
+                    user.getIdToken().then(token => {
+                        localStorageManager.migrateDiscussionsToServer(
+                            "{% url 'ai_discussion:migrate_local_discussions' %}", 
+                            token
+                        ).then(result => {
+                            console.log('Migration result:', result);
+                        });
+                    });
+                }
+            } else {
+                // User is signed out
+                // Check if page shows logged in state
+                var isAuthenticatedPage = false;
+                {% if is_authenticated %}
+                    isAuthenticatedPage = true;
+                {% endif %}
+                
+                if (isAuthenticatedPage) {
+                    // Clear session check on logout
+                    sessionStorage.removeItem('userSessionChecked');
+                    console.log('User signed out but page shows logged in state - refreshing');
+                    window.location.reload();
+                }
+            }
+        });
     </script>
     
     {% block extra_js %}{% endblock %}
