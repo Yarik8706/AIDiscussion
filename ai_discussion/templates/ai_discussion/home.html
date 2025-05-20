@@ -3,26 +3,82 @@
 {% block title %}Главная - AI Дискуссии{% endblock %}
 
 {% block content %}
+{% if messages %}
+<div class="messages mt-3 mb-4">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}" role="alert">
+            {{ message }}
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not is_authenticated %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-body text-center p-5">
+                <h1 class="display-5 mb-4">Задайте вопрос AI участникам</h1>
+                <p class="lead mb-4">Наша система организует дискуссию между несколькими AI участниками с разными характерами и взглядами, которые обсудят ваш вопрос.</p>
+                {% if is_authenticated %}
+                <div class="alert alert-success mb-4">
+                    <i class="fas fa-check-circle me-2"></i> Вы авторизованы! Ваши обсуждения будут сохранены в вашем аккаунте и доступны на всех устройствах.
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i> <a href="{% url 'ai_discussion:login' %}" class="alert-link">Войдите</a> в систему, чтобы ваши обсуждения сохранялись в вашем аккаунте и были доступны на всех устройствах.
+                </div>
+                {% endif %}
+                
+                <form method="POST" action="{% url 'ai_discussion:start_discussion' %}" class="mb-4">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="question" class="form-label">Ваш вопрос или тема для обсуждения</label>
+                        <textarea class="form-control" id="question" name="question" rows="3" placeholder="Введите вопрос или тему для обсуждения между AI..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Начать обсуждение</button>
+                </form>
+                
+                {% if processing %}
+                <div class="text-center py-5">
+                    <div class="loader mb-3"></div>
+                    <p class="text-muted">Начинаем обсуждение, пожалуйста подождите...</p>
+                </div>
+                {% endif %}
+                
+                {% if error_message %}
+                <div class="alert alert-danger mt-3">{{ error_message }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
 <div class="row">
     <div class="col-md-8 mb-4">
         <div class="card shadow">
             <div class="card-body">
                 <h2 class="card-title mb-4">Новая дискуссия</h2>
                 
-                <div id="discussion-form">
+                <form method="POST" action="{% url 'ai_discussion:start_discussion' %}">
+                    {% csrf_token %}
                     <div class="mb-3">
                         <label for="question" class="form-label">Ваш вопрос или тема для обсуждения</label>
-                        <textarea class="form-control" id="question" rows="3" placeholder="Введите вопрос или тему для обсуждения между AI..."></textarea>
+                        <textarea class="form-control" id="question" name="question" rows="3" placeholder="Введите вопрос или тему для обсуждения между AI..." required></textarea>
                     </div>
-                    <button id="start-discussion" class="btn btn-primary">Начать обсуждение</button>
-                </div>
+                    <button type="submit" class="btn btn-primary">Начать обсуждение</button>
+                </form>
                 
-                <div id="loading-container" class="text-center py-5 d-none">
+                {% if processing %}
+                <div class="text-center py-5">
                     <div class="loader mb-3"></div>
                     <p class="text-muted">Начинаем обсуждение, пожалуйста подождите...</p>
                 </div>
+                {% endif %}
                 
-                <div id="error-container" class="alert alert-danger mt-3 d-none"></div>
+                {% if error_message %}
+                <div class="alert alert-danger mt-3">{{ error_message }}</div>
+                {% endif %}
             </div>
         </div>
         
@@ -41,15 +97,23 @@
                     </p>
                     {% if is_authenticated %}
                     <p>User ID: {{ request.firebase_user_id }}</p>
+                    {% if request.firebase_user %}
+                    <p>Email: {{ request.firebase_user.email }}</p>
+                    <p>Display Name: {{ request.firebase_user.display_name }}</p>
+                    {% endif %}
                     {% endif %}
                 </div>
                 <div class="mb-3">
-                    <h6>Client status:</h6>
-                    <div id="client-auth-status">Loading...</div>
+                    <form method="GET" action="{% url 'ai_discussion:auth_debug' %}">
+                        <button type="submit" class="btn btn-sm btn-primary">Check Auth Status</button>
+                    </form>
                 </div>
+                {% if auth_debug_data %}
                 <div class="mb-3">
-                    <button id="check-auth-status" class="btn btn-sm btn-primary">Check Auth Status</button>
+                    <h6 class="mt-3">Server response:</h6>
+                    <pre class="bg-light p-2" style="max-height: 200px; overflow: auto">{{ auth_debug_data }}</pre>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -87,111 +151,24 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
-{% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Elements
-        const startBtn = document.getElementById('start-discussion');
-        const questionInput = document.getElementById('question');
-        const discussionForm = document.getElementById('discussion-form');
-        const loadingContainer = document.getElementById('loading-container');
-        const errorContainer = document.getElementById('error-container');
-        const clientAuthStatus = document.getElementById('client-auth-status');
-        const checkAuthBtn = document.getElementById('check-auth-status');
-        
-        // Check if elements exist
-        if (!startBtn || !questionInput) {
-            console.error("Required elements not found");
-            return;
-        }
-        
-        // Start discussion
-        startBtn.addEventListener('click', function() {
-            const question = questionInput.value.trim();
-            if (!question) {
-                showError("Пожалуйста, введите вопрос или тему для обсуждения");
-                return;
-            }
-            
-            // Show loading state
-            discussionForm.classList.add('d-none');
-            loadingContainer.classList.remove('d-none');
-            errorContainer.classList.add('d-none');
-            
-            // Send request to start discussion
-            fetch('{% url "ai_discussion:start_discussion" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ question })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Redirect to discussion page
-                    window.location.href = data.redirect_url;
-                } else {
-                    showError(data.message || "Произошла ошибка при создании обсуждения");
-                }
-            })
-            .catch(error => {
-                console.error("Error starting discussion:", error);
-                showError("Произошла ошибка при создании обсуждения");
-            })
-            .finally(() => {
-                // Restore form state if there was an error
-                discussionForm.classList.remove('d-none');
-                loadingContainer.classList.add('d-none');
-            });
-        });
-        
-        function showError(message) {
-            errorContainer.textContent = message;
-            errorContainer.classList.remove('d-none');
-        }
-        
-        // Debug: Check auth status
-        function updateClientAuthStatus() {
-            const currentUser = firebase.auth().currentUser;
-            const token = localStorage.getItem('firebaseToken');
-            const cookie = document.cookie.includes('firebaseToken');
-            
-            let html = `
-                <p>Firebase User: <span class="badge ${currentUser ? 'bg-success' : 'bg-danger'}">${currentUser ? currentUser.email : 'None'}</span></p>
-                <p>Local Storage Token: <span class="badge ${token ? 'bg-success' : 'bg-danger'}">${token ? 'Present' : 'Missing'}</span></p>
-                <p>Cookie Token: <span class="badge ${cookie ? 'bg-success' : 'bg-danger'}">${cookie ? 'Present' : 'Missing'}</span></p>
-            `;
-            
-            clientAuthStatus.innerHTML = html;
-        }
-        
-        if (checkAuthBtn) {
-            checkAuthBtn.addEventListener('click', function() {
-                updateClientAuthStatus();
-                
-                // Also check with server
-                fetch('{% url "ai_discussion:auth_debug" %}')
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log("Server auth status:", data);
-                        const serverInfo = document.createElement('div');
-                        serverInfo.innerHTML = `
-                            <h6 class="mt-3">Server response:</h6>
-                            <pre class="bg-light p-2" style="max-height: 200px; overflow: auto">${JSON.stringify(data, null, 2)}</pre>
-                        `;
-                        clientAuthStatus.appendChild(serverInfo);
-                    })
-                    .catch(error => {
-                        console.error("Error checking auth status:", error);
-                    });
-            });
-        }
-        
-        // Update client auth status on load
-        updateClientAuthStatus();
-    });
-</script>
+{% block extra_css %}
+<style>
+    .loader {
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #3498db;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 2s linear infinite;
+        margin: 0 auto;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
 {% endblock %} 

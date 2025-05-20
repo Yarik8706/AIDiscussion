@@ -177,4 +177,12 @@ FIREBASE_DATABASE_URL = os.environ.get('FIREBASE_DATABASE_URL', '')
 FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
 FIREBASE_STORAGE_BUCKET = os.environ.get('FIREBASE_STORAGE_BUCKET', '')
 FIREBASE_MESSAGING_SENDER_ID = os.environ.get('FIREBASE_MESSAGING_SENDER_ID', '')
-FIREBASE_APP_ID = os.environ.get('FIREBASE_APP_ID', '') 
+FIREBASE_APP_ID = os.environ.get('FIREBASE_APP_ID', '')
+
+# Firebase Authentication Settings
+FIREBASE_AUTH_SETTINGS = {
+    'SERVICE_ACCOUNT_FILE_PATH': os.path.join(BASE_DIR, 'firebase-service-account.json'),
+    'CREATE_USER_IN_DB': True,
+    'CHECK_JWT_REVOKED': True,
+    'REQUIRE_EMAIL_VERIFICATION': False,
+} 

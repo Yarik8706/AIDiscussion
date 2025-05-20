@@ -16,233 +16,139 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     
     <style>
+        .navbar {
+            background-color: #4285F4;
+            color: white;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: white !important;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.85) !important;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+        }
+        
         body {
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            background-color: #f8f9fa;
             min-height: 100vh;
         }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        
+        .main-content {
+            padding: 20px;
         }
-        .message-card {
-            margin-bottom: 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-        .navbar {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        .btn-primary {
-            background-color: #4c6ef5;
-            border-color: #4c6ef5;
-        }
-        .btn-primary:hover {
-            background-color: #3b5bdb;
-            border-color: #3b5bdb;
-        }
-        .discussion-btn {
-            transition: transform 0.2s;
-        }
-        .discussion-btn:hover {
-            transform: translateY(-3px);
-        }
-        .loader {
-            display: inline-block;
-            width: 80px;
-            height: 80px;
-        }
-        .loader:after {
-            content: " ";
-            display: block;
-            width: 64px;
-            height: 64px;
-            margin: 8px;
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            border: 6px solid #4c6ef5;
-            border-color: #4c6ef5 transparent #4c6ef5 transparent;
-            animation: loader 1.2s linear infinite;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #e0e0e0;
+            color: #757575;
+            font-weight: bold;
+            margin-right: 10px;
         }
-        @keyframes loader {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
-        .fade-in {
-            animation: fadeIn 0.5s;
-        }
-        @keyframes fadeIn {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
+        
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px 0;
+            margin-top: 40px;
+            border-top: 1px solid #e9ecef;
         }
     </style>
-    {% block extra_css %}{% endblock %}
+    
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <header class="bg-dark text-white py-3">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
         <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <a href="{% url 'ai_discussion:home' %}" class="text-white text-decoration-none">
-                    <h1 class="h3 mb-0">AI Discussion</h1>
-                </a>
-                <div>
-                    {% if is_authenticated %}
-                    <span class="me-3">
-                        <i class="fas fa-user me-1"></i> 
-                        <span id="user-email"></span>
-                    </span>
-                    <button class="btn btn-outline-light btn-sm" id="logout-btn">
-                        <i class="fas fa-sign-out-alt me-1"></i> Выйти
-                    </button>
+            <a class="navbar-brand" href="/">AI Discussion</a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Главная</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/discussions/">Мои обсуждения</a>
+                    </li>
+                </ul>
+                
+                <div class="d-flex align-items-center">
+                    {% if request.firebase_user_id %}
+                        <div class="user-profile d-flex align-items-center">
+                            <div class="user-avatar" id="userAvatar">
+                                {% if request.firebase_user.photo_url %}
+                                    <img src="{{ request.firebase_user.photo_url }}" alt="Аватар пользователя">
+                                {% elif request.firebase_user.display_name %}
+                                    {{ request.firebase_user.display_name|slice:":1" }}
+                                {% elif request.firebase_user.email %}
+                                    {{ request.firebase_user.email|slice:":1" }}
+                                {% else %}
+                                    U
+                                {% endif %}
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-link text-white dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown">
+                                    <span id="userName">
+                                        {% if request.firebase_user.display_name %}
+                                            {{ request.firebase_user.display_name }}
+                                        {% elif request.firebase_user.email %}
+                                            {{ request.firebase_user.email }}
+                                        {% else %}
+                                            Пользователь
+                                        {% endif %}
+                                    </span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="/discussions/">Мои обсуждения</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="/logout/">Выйти</a></li>
+                                </ul>
+                            </div>
+                        </div>
                     {% else %}
-                    <a href="{% url 'ai_discussion:login' %}" class="btn btn-outline-light btn-sm">
-                        <i class="fas fa-sign-in-alt me-1"></i> Войти
-                    </a>
+                        <a href="/login/" class="btn btn-outline-light me-2">Войти</a>
+                        <a href="/signup/" class="btn btn-light">Регистрация</a>
                     {% endif %}
                 </div>
             </div>
         </div>
-    </header>
-    
-    <nav class="bg-light py-2">
-        <div class="container">
-            <div class="d-flex">
-                <a href="{% url 'ai_discussion:home' %}" class="me-3 text-decoration-none">
-                    <i class="fas fa-home me-1"></i> Главная
-                </a>
-                <a href="{% url 'ai_discussion:discussions_list' %}" class="text-decoration-none">
-                    <i class="fas fa-list me-1"></i> {% if is_authenticated %}Ваши обсуждения{% else %}Обсуждения{% endif %}
-                </a>
-            </div>
-        </div>
     </nav>
-    
-    <main class="container py-4">
+
+    <!-- Main Content -->
+    <div class="container main-content">
         {% block content %}{% endblock %}
-    </main>
-    
-    <footer class="bg-dark text-white py-3 mt-5">
-        <div class="container text-center">
-            <p class="mb-0">&copy; 2025 AI Discussion</p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer text-center">
+        <div class="container">
+            <p class="mb-0">&copy; {% now "Y" %} AI Discussion. Все права защищены.</p>
         </div>
     </footer>
-    
-    <!-- Bootstrap JS Bundle with Popper -->
+
+    <!-- Bootstrap and other scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Firebase App (the core Firebase SDK) -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.8/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.8/firebase-auth-compat.js"></script>
-    
-    <!-- Firebase Config and initialization (MUST be before other scripts) -->
-    <script>
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "{{ firebase_config.apiKey }}",
-            authDomain: "{{ firebase_config.authDomain }}",
-            projectId: "{{ firebase_config.projectId }}",
-            storageBucket: "{{ firebase_config.storageBucket }}",
-            messagingSenderId: "{{ firebase_config.messagingSenderId }}",
-            appId: "{{ firebase_config.appId }}"
-        };
-        
-        console.log("Firebase config:", firebaseConfig);
-        
-        // Initialize Firebase immediately
-        firebase.initializeApp(firebaseConfig);
-        console.log("Firebase initialized directly");
-    </script>
-    
-    <!-- Custom LocalStorage Manager -->
-    <script src="{% static 'js/local-storage-manager.js' %}"></script>
-    
-    <!-- Auth Helper - Adds token to all AJAX requests -->
-    <script src="{% static 'js/auth-helper.js' %}"></script>
-    
-    <!-- Additional Firebase script -->
-    <script>
-        // Check if user is already stored in session to avoid unnecessary page refreshes
-        var userSessionChecked = sessionStorage.getItem('userSessionChecked');
-        
-        // Auth state change listener
-        firebase.auth().onAuthStateChanged(function(user) {
-            console.log("Auth state changed:", user ? "User signed in" : "User signed out");
-            
-            if (user) {
-                // User is signed in
-                console.log("User email:", user.email);
-                
-                // Store status in session to prevent circular refreshes
-                sessionStorage.setItem('userSessionChecked', 'true');
-                
-                user.getIdToken().then(function(token) {
-                    console.log("Got token for auth state");
-                    localStorage.setItem('firebaseToken', token);
-                    
-                    // Set user email if element exists
-                    const userEmailElement = document.getElementById('user-email');
-                    if (userEmailElement) {
-                        userEmailElement.textContent = user.email;
-                    }
-                    
-                    // We only refresh if this is the first time we detect a logged-in state
-                    var isAuthenticated = false;
-                    {% if is_authenticated %}
-                        isAuthenticated = true;
-                    {% endif %}
-                    
-                    if (!isAuthenticated && !userSessionChecked) {
-                        console.log('First detection of authenticated user - refreshing once');
-                        window.location.reload();
-                    }
-                });
-                
-                // Handle logout button
-                const logoutBtn = document.getElementById('logout-btn');
-                if (logoutBtn) {
-                    logoutBtn.addEventListener('click', function() {
-                        // Clear session check before logout
-                        sessionStorage.removeItem('userSessionChecked');
-                        
-                        firebase.auth().signOut().then(function() {
-                            localStorage.removeItem('firebaseToken');
-                            document.cookie = 'firebaseToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-                            window.location.href = "{% url 'ai_discussion:home' %}";
-                        }).catch(function(error) {
-                            console.error('Error signing out:', error);
-                        });
-                    });
-                }
-                
-                // If user just signed in, migrate local discussions
-                const justSignedIn = sessionStorage.getItem('justSignedIn');
-                if (justSignedIn) {
-                    sessionStorage.removeItem('justSignedIn');
-                    
-                    user.getIdToken().then(token => {
-                        localStorageManager.migrateDiscussionsToServer(
-                            "{% url 'ai_discussion:migrate_local_discussions' %}", 
-                            token
-                        ).then(result => {
-                            console.log('Migration result:', result);
-                        });
-                    });
-                }
-            } else {
-                // User is signed out
-                // Check if page shows logged in state
-                var isAuthenticatedPage = false;
-                {% if is_authenticated %}
-                    isAuthenticatedPage = true;
-                {% endif %}
-                
-                if (isAuthenticatedPage) {
-                    // Clear session check on logout
-                    sessionStorage.removeItem('userSessionChecked');
-                    console.log('User signed out but page shows logged in state - refreshing');
-                    window.location.reload();
-                }
-            }
-        });
-    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

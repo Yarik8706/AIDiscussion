@@ -1,10 +1,10 @@
 {% extends 'ai_discussion/base.html' %}
 
-{% block title %}Войти | AI Discussion{% endblock %}
+{% block title %}Регистрация | AI Discussion{% endblock %}
 
 {% block extra_head %}
 <style>
-    .login-container {
+    .signup-container {
         max-width: 500px;
         margin: 0 auto;
         padding: 30px;
@@ -98,12 +98,18 @@
         color: #155724;
         border: 1px solid #c3e6cb;
     }
+    
+    .password-requirements {
+        font-size: 12px;
+        color: #6c757d;
+        margin-top: 5px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="login-container">
-    <h2 class="text-center mb-4">Войти в систему</h2>
+<div class="signup-container">
+    <h2 class="text-center mb-4">Регистрация аккаунта</h2>
     
     {% if error_message %}
     <div class="alert alert-danger">{{ error_message }}</div>
@@ -113,8 +119,12 @@
     <div class="alert alert-success">{{ success_message }}</div>
     {% endif %}
     
-    <form id="loginForm" action="{% url 'ai_discussion:login' %}" method="POST">
+    <form id="signupForm" action="{% url 'ai_discussion:signup' %}" method="POST">
         {% csrf_token %}
+        <div class="form-group">
+            <label for="displayName">Имя пользователя</label>
+            <input type="text" class="form-control" id="displayName" name="displayName" required>
+        </div>
         <div class="form-group">
             <label for="email">Email</label>
             <input type="email" class="form-control" id="email" name="email" required>
@@ -122,8 +132,13 @@
         <div class="form-group">
             <label for="password">Пароль</label>
             <input type="password" class="form-control" id="password" name="password" required>
+            <p class="password-requirements">Пароль должен содержать не менее 6 символов</p>
         </div>
-        <button type="submit" class="btn-primary">Войти</button>
+        <div class="form-group">
+            <label for="confirmPassword">Подтверждение пароля</label>
+            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+        </div>
+        <button type="submit" class="btn-primary">Зарегистрироваться</button>
     </form>
     
     <div class="divider">
@@ -132,12 +147,11 @@
     
     <a href="/auth/google/login/" class="btn-google">
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo">
-        Войти с помощью Google
+        Регистрация с помощью Google
     </a>
     
     <div class="text-center mt-3">
-        <p>Еще нет аккаунта? <a href="/signup">Зарегистрироваться</a></p>
-        <p><a href="/reset-password">Забыли пароль?</a></p>
+        <p>Уже есть аккаунт? <a href="/login">Войти</a></p>
     </div>
 </div>
 {% endblock %} 
