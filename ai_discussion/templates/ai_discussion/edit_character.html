@@ -1,0 +1,109 @@
+{% extends 'ai_discussion/base.html' %}
+
+{% block title %}Редактирование персонажа - AI Дискуссии{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="display-6">Редактирование персонажа</h1>
+                <a href="{% url 'ai_discussion:manage_characters' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i> Назад
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if error_message %}
+    <div class="alert alert-danger mb-4">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <form method="POST" action="{% url 'ai_discussion:edit_character' character.id %}">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="name" class="form-label">Имя персонажа</label>
+                            <input type="text" class="form-control" id="name" name="name" required 
+                                   placeholder="Введите имя персонажа" maxlength="100" value="{{ character.name }}">
+                            <div class="form-text">Имя будет отображаться в обсуждениях и списке персонажей.</div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="discusser_type" class="form-label">Тип нейросети</label>
+                            <select class="form-select" id="discusser_type" name="discusser_type" required>
+                                <option value="ai" {% if character.discusser_type == 'ai' %}selected{% endif %}>Обычная нейросеть</option>
+                                <option value="cognitive" {% if character.discusser_type == 'cognitive' %}selected{% endif %}>Аналитическая нейросеть</option>
+                            </select>
+                            <div class="form-text">
+                                <strong>Обычная</strong> - стандартная нейросеть для обычных ответов.<br>
+                                <strong>Аналитическая</strong> - продвинутая нейросеть с улучшенными аналитическими способностями.
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="character" class="form-label">Описание характера</label>
+                            <textarea class="form-control" id="character" name="character" rows="12" required
+                                      placeholder="Опишите характер, особенности и стиль общения вашего персонажа...">{{ character.character }}</textarea>
+                            <div class="form-text">
+                                Подробно опишите характер, стиль общения, ценности и особенности вашего персонажа.
+                                Нейросеть будет следовать этому описанию при генерации ответов.
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                            <a href="{% url 'ai_discussion:manage_characters' %}" class="btn btn-outline-secondary ms-2">Отмена</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Рекомендации</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Как составить хорошее описание характера:</strong></p>
+                    <ul>
+                        <li>Опишите личность и темперамент персонажа</li>
+                        <li>Определите его ценности и принципы</li>
+                        <li>Укажите особенности речи и стиля общения</li>
+                        <li>Опишите типичные реакции на разные ситуации</li>
+                        <li>Добавьте уникальные черты, чтобы персонаж был узнаваемым</li>
+                    </ul>
+                    <p class="text-muted">Чем подробнее описание, тем точнее нейросеть будет следовать характеру.</p>
+                </div>
+            </div>
+            
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Пример описания</h5>
+                </div>
+                <div class="card-body">
+                    <small class="text-muted">
+                        <p>Ты — эксперт по экологии с оптимистичным взглядом на мир. Ты говоришь уверенно, но доброжелательно, 
+                        часто используя научные термины, которые тут же объясняешь простыми словами.</p>
+                        
+                        <p>В обсуждениях ты опираешься на факты и исследования, но также учитываешь 
+                        эмоциональные и социальные аспекты проблем. Ты веришь, что технологии могут 
+                        помочь решить экологические проблемы, если использовать их правильно.</p>
+                        
+                        <p>Твоя цель — достичь консенсуса, который будет учитывать долгосрочное 
+                        благополучие планеты и людей. Ты готов искать компромиссы, но не поступаешься 
+                        ключевыми экологическими принципами.</p>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

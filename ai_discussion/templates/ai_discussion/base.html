@@ -71,6 +71,7 @@
         }
     </style>
     
+    {% block extra_css %}{% endblock %}
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -91,6 +92,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/discussions/">Мои обсуждения</a>
                     </li>
+                    {% if request.firebase_user_id %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'ai_discussion:manage_characters' %}">Мои персонажи</a>
+                    </li>
+                    {% endif %}
                 </ul>
                 
                 <div class="d-flex align-items-center">
@@ -121,6 +127,7 @@
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li><a class="dropdown-item" href="/discussions/">Мои обсуждения</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'ai_discussion:manage_characters' %}">Мои персонажи</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="/logout/">Выйти</a></li>
                                 </ul>

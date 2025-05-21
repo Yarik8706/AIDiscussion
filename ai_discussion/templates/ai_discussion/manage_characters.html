@@ -1,0 +1,111 @@
+{% extends 'ai_discussion/base.html' %}
+
+{% block title %}Управление персонажами - AI Дискуссии{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="display-6">Управление персонажами</h1>
+                <div>
+                    <a href="{% url 'ai_discussion:create_character' %}" class="btn btn-success">
+                        <i class="fas fa-plus-circle me-2"></i> Создать персонажа
+                    </a>
+                    <a href="{% url 'ai_discussion:home' %}" class="btn btn-outline-primary ms-2">
+                        <i class="fas fa-arrow-left me-2"></i> Назад
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="messages mb-4">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    {% if characters %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Имя</th>
+                                        <th>Тип нейросети</th>
+                                        <th>Дата создания</th>
+                                        <th class="text-end">Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for character in characters %}
+                                    <tr>
+                                        <td>{{ character.name }}</td>
+                                        <td>
+                                            {% if character.discusser_type == 'cognitive' %}
+                                                <span class="badge bg-warning text-dark">Аналитическая</span>
+                                            {% else %}
+                                                <span class="badge bg-primary">Обычная</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ character.created_at|date:"d.m.Y H:i" }}</td>
+                                        <td class="text-end">
+                                            <a href="{% url 'ai_discussion:edit_character' character.id %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i> Изменить
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" 
+                                                    data-bs-toggle="modal" data-bs-target="#deleteModal{{ character.id }}">
+                                                <i class="fas fa-trash"></i> Удалить
+                                            </button>
+                                            
+                                            <!-- Modal for delete confirmation -->
+                                            <div class="modal fade" id="deleteModal{{ character.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ character.id }}" aria-hidden="true">
+                                                <div class="modal-dialog">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title" id="deleteModalLabel{{ character.id }}">Подтверждение удаления</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body text-start">
+                                                            Вы действительно хотите удалить персонажа "{{ character.name }}"?
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                                            <form action="{% url 'ai_discussion:delete_character' character.id %}" method="POST" class="d-inline">
+                                                                {% csrf_token %}
+                                                                <button type="submit" class="btn btn-danger">Удалить</button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-user-slash fa-3x text-muted mb-3"></i>
+                            <h4>У вас пока нет персонажей</h4>
+                            <p class="text-muted mb-4">Создайте своего первого персонажа для участия в обсуждениях</p>
+                            <a href="{% url 'ai_discussion:create_character' %}" class="btn btn-primary">
+                                <i class="fas fa-plus-circle me-2"></i> Создать персонажа
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

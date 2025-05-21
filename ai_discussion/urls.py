@@ -30,6 +30,15 @@ urlpatterns = [
     path('api/user/discussions/', views.user_discussions, name='user_discussions'),
     path('api/user/migrate-local-discussions/', views.migrate_local_discussions, name='migrate_local_discussions'),
     
+    # Character management
+    path('characters/', views.manage_characters, name='manage_characters'),
+    path('characters/create/', views.create_character, name='create_character'),
+    path('characters/<int:character_id>/edit/', views.edit_character, name='edit_character'),
+    path('characters/<int:character_id>/delete/', views.delete_character, name='delete_character'),
+    
+    # Participant selection
+    path('api/participants/select/', views.select_participants, name='select_participants'),
+    
     # Debug endpoints
     path('auth/debug/', views.auth_debug, name='auth_debug'),  # For form submissions
     path('api/debug/auth/', views.auth_debug, name='api_auth_debug'),  # For API requests

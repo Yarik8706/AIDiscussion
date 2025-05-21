@@ -1,0 +1,39 @@
+@require_POST
+def select_participants(request):
+    """Выбор участников перед созданием обсуждения"""
+    # Получаем список всех участников и выбранных
+    static_participants = []
+    custom_participants = []
+    
+    # Загружаем статические участники из файла настроек
+    try:
+        with open('discusser_settings.json', 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+            for i, participant in enumerate(settings.get('settings', [])):
+                static_participants.append({
+                    'id': f'{i+1}',
+                    'name': participant.get('name', f'Участник {i+1}'),
+                    'type': participant.get('discusser_type', 'ai'),
+                    'is_custom': False,
+                    'default_order': i+1  # Добавляем информацию о порядке
+                })
+    except Exception as e:
+        logger.error(f"Error loading static participants: {e}")
+    
+    # Если пользователь авторизован, добавляем его пользовательские характеры
+    if request.firebase_user_id:
+        user_characters = CustomCharacter.objects.filter(firebase_user_id=request.firebase_user_id)
+        for idx, character in enumerate(user_characters):
+            custom_participants.append({
+                'id': f'custom_{character.id}',
+                'name': character.name,
+                'type': character.discusser_type,
+                'is_custom': True,
+                'default_order': len(static_participants) + idx + 1  # Порядковый номер после статических
+            })
+    
+    # Возвращаем JSON с данными всех участников
+    return JsonResponse({
+        'static_participants': static_participants,
+        'custom_participants': custom_participants
+    }) 

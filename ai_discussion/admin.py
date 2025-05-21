@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Discussion, Message
+from .models import Discussion, Message, CustomCharacter
 
 class MessageInline(admin.TabularInline):
     model = Message
@@ -26,3 +26,10 @@ class MessageAdmin(admin.ModelAdmin):
             return obj.content[:47] + "..."
         return obj.content
     content_preview.short_description = 'Содержание'
+
+@admin.register(CustomCharacter)
+class CustomCharacterAdmin(admin.ModelAdmin):
+    list_display = ['name', 'discusser_type', 'firebase_user_id', 'created_at']
+    search_fields = ['name', 'character']
+    list_filter = ['discusser_type', 'created_at']
+    readonly_fields = ['created_at']

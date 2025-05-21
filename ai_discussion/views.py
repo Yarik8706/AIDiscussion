@@ -7,8 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.contrib import messages
 from asgiref.sync import sync_to_async
-from .models import Discussion, Message
-from .settings_loader import load_participants
+from .models import Discussion, Message, CustomCharacter
+from .settings_loader import load_participants, load_static_participants
 from .discussion import run_discussion
 import asyncio
 import json
@@ -29,12 +29,91 @@ logger = logging.getLogger(__name__)
 
 # Cache for participants
 _participants = None
+_static_participants = None
 
-async def get_participants():
-    global _participants
-    if _participants is None:
-        _participants = await load_participants()
-    return _participants
+async def get_participants(selected_ids=None):
+    """Загружает участников обсуждения с опциональной фильтрацией по ID"""
+    global _participants, _static_participants
+    
+    # Загружаем статических участников, если еще не загружены
+    if _static_participants is None:
+        _static_participants = await load_static_participants()
+    
+    # Если не указаны конкретные ID, загружаем всех
+    if selected_ids is None:
+        if _participants is None:
+            _participants = await load_participants()
+        return _participants
+    
+    # Фильтруем по выбранным ID
+    selected_participants = []
+    
+    # Создаем словарь участников для быстрого поиска
+    static_participants_dict = {}
+    for participant in _static_participants:
+        participant_id = getattr(participant, 'id', None) or participant.name
+        static_participants_dict[str(participant_id)] = participant
+    
+    # Добавляем участников в порядке, указанном в selected_ids
+    for participant_id in selected_ids:
+        if participant_id.startswith('custom_'):
+            # Это пользовательский участник, его добавим позже
+            continue
+            
+        # Если это статический участник, добавляем его сразу
+        if participant_id in static_participants_dict:
+            selected_participants.append(static_participants_dict[participant_id])
+    
+    # Добавляем пользовательских участников из БД (асинхронно)
+    custom_ids = [id for id in selected_ids if id.startswith('custom_')]
+    if custom_ids:
+        # Получаем ID из строк 'custom_X'
+        custom_numeric_ids = [int(id.replace('custom_', '')) for id in custom_ids]
+        
+        # Создаем словарь ID -> позиция для сохранения порядка
+        custom_id_positions = {custom_ids[i]: i for i in range(len(custom_ids))}
+        
+        # Получаем все нужные объекты из БД
+        custom_characters = await sync_to_async(list)(
+            CustomCharacter.objects.filter(id__in=custom_numeric_ids)
+        )
+        
+        # Создаем словарь объектов по ID
+        custom_characters_dict = {f"custom_{char.id}": char for char in custom_characters}
+        
+        # Создаем дискуссеров из пользовательских характеров в нужном порядке
+        from .discusser_factory import DiscusserFactory
+        for custom_id in custom_ids:
+            if custom_id in custom_characters_dict:
+                character = custom_characters_dict[custom_id]
+                try:
+                    # Формируем конфигурацию для фабрики
+                    config = {
+                        'context': character.character,
+                        'env_token_name': 'GENAI_API_KEY_1',  # Используем первый ключ API для пользовательских характеров
+                        'backend_type': 'gemini',
+                        'model': 'gemini-2.0-flash-001'
+                    }
+                    
+                    # Создаем дискуссера
+                    custom_discusser = await DiscusserFactory.create_discusser(
+                        discusser_type=character.discusser_type,
+                        name=character.name,
+                        config=config
+                    )
+                    
+                    selected_participants.append(custom_discusser)
+                except Exception as e:
+                    logger.error(f"Error creating custom discusser: {e}")
+    
+    # Проверяем, что есть хотя бы 2 участника
+    if len(selected_participants) < 2:
+        # Если меньше 2, возвращаем первых двух стандартных
+        if _participants is None:
+            _participants = await load_participants()
+        return _participants[:2]
+    
+    return selected_participants
 
 def home(request):
     """Главная страница с формой для вопроса"""
@@ -318,14 +397,20 @@ def start_discussion(request):
     try:
         # Get question from POST data, handling both form submissions and JSON
         question = None
+        selected_participants = None
         
         if request.content_type == 'application/json':
             # For AJAX requests
             data = json.loads(request.body)
             question = data.get('question', '').strip()
+            selected_participants = data.get('participants', None)
         else:
             # For form submissions
             question = request.POST.get('question', '').strip()
+            
+            # Получаем выбранных участников как список ID
+            if request.POST.getlist('participants'):
+                selected_participants = request.POST.getlist('participants')
         
         if not question:
             # Handle empty question
@@ -338,11 +423,28 @@ def start_discussion(request):
                 # Redirect back to home with error
                 return redirect(f'/?error={"Вопрос не может быть пустым"}')
         
+        # Проверяем количество выбранных участников
+        if selected_participants and len(selected_participants) < 2:
+            if request.content_type == 'application/json':
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Для обсуждения нужно выбрать минимум двух участников'
+                }, status=400)
+            else:
+                # Redirect back to home with error
+                return redirect(f'/?error={"Для обсуждения нужно выбрать минимум двух участников"}')
+        
         # Create a new discussion in the database
         discussion = Discussion.objects.create(
             question=question,
             firebase_user_id=request.firebase_user_id
         )
+        
+        # Сохраняем выбранных участников, если они были указаны
+        if selected_participants:
+            # Сохраняем порядок участников как есть - он уже отсортирован в форме
+            discussion.set_selected_participants(selected_participants)
+            discussion.save()
         
         # Start the async discussion in a separate thread
         threading.Thread(
@@ -426,8 +528,11 @@ async def process_discussion(discussion_id, question):
         async def save_message(message):
             await create_message(discussion, message)
         
+        # Получаем выбранных участников, если они были указаны
+        selected_ids = discussion.get_selected_participants()
+        
         # Запускаем обсуждение с callbacks для сохранения сообщений
-        participants = await get_participants()
+        participants = await get_participants(selected_ids)
         summary, messages = await run_discussion(
             participants=participants,
             question=question,
@@ -455,6 +560,7 @@ async def process_discussion(discussion_id, question):
                     'completed': discussion.completed,
                     'is_stopped': discussion.is_stopped,
                     'user_id': discussion.firebase_user_id,
+                    'selected_participants': discussion.get_selected_participants()
                 }
                 
                 # Сохраняем в Firestore
@@ -793,3 +899,157 @@ def google_auth_callback(request):
         logger.error(f"Error in Google auth callback: {e}")
         messages.error(request, "Произошла ошибка при аутентификации через Google")
         return redirect('ai_discussion:login')
+
+# Добавим новые представления для работы с пользовательскими характерами
+
+@firebase_auth_required
+def manage_characters(request):
+    """Управление пользовательскими характерами"""
+    # Получаем все характеры, созданные этим пользователем
+    custom_characters = CustomCharacter.objects.filter(firebase_user_id=request.firebase_user_id).order_by('name')
+    
+    return render(request, 'ai_discussion/manage_characters.html', {
+        'characters': custom_characters,
+        'is_authenticated': request.firebase_user_id is not None
+    })
+
+@firebase_auth_required
+def create_character(request):
+    """Создание нового пользовательского характера"""
+    error_message = None
+    
+    if request.method == 'POST':
+        try:
+            name = request.POST.get('name', '').strip()
+            character = request.POST.get('character', '').strip()
+            discusser_type = request.POST.get('discusser_type', 'ai')
+            
+            if not name or not character:
+                error_message = 'Необходимо заполнить все поля'
+            elif len(name) > 100:
+                error_message = 'Имя не должно превышать 100 символов'
+            else:
+                # Создаем новый характер
+                CustomCharacter.objects.create(
+                    name=name,
+                    character=character,
+                    discusser_type=discusser_type,
+                    firebase_user_id=request.firebase_user_id
+                )
+                
+                messages.success(request, f'Характер "{name}" успешно создан')
+                return redirect('ai_discussion:manage_characters')
+                
+        except Exception as e:
+            logger.error(f"Error creating character: {e}")
+            error_message = f'Ошибка при создании характера: {str(e)}'
+    
+    # Если GET или были ошибки в POST
+    return render(request, 'ai_discussion/create_character.html', {
+        'error_message': error_message,
+        'is_authenticated': request.firebase_user_id is not None
+    })
+
+@firebase_auth_required
+def edit_character(request, character_id):
+    """Редактирование пользовательского характера"""
+    # Получаем объект характера с проверкой владельца
+    character = get_object_or_404(CustomCharacter, id=character_id, firebase_user_id=request.firebase_user_id)
+    error_message = None
+    
+    if request.method == 'POST':
+        try:
+            name = request.POST.get('name', '').strip()
+            character_text = request.POST.get('character', '').strip()
+            discusser_type = request.POST.get('discusser_type', 'ai')
+            
+            if not name or not character_text:
+                error_message = 'Необходимо заполнить все поля'
+            elif len(name) > 100:
+                error_message = 'Имя не должно превышать 100 символов'
+            else:
+                # Обновляем характер
+                character.name = name
+                character.character = character_text
+                character.discusser_type = discusser_type
+                character.save()
+                
+                messages.success(request, f'Характер "{name}" успешно обновлен')
+                return redirect('ai_discussion:manage_characters')
+                
+        except Exception as e:
+            logger.error(f"Error updating character: {e}")
+            error_message = f'Ошибка при обновлении характера: {str(e)}'
+    
+    # Если GET или были ошибки в POST
+    return render(request, 'ai_discussion/edit_character.html', {
+        'character': character,
+        'error_message': error_message,
+        'is_authenticated': request.firebase_user_id is not None
+    })
+
+@csrf_exempt
+@require_POST
+@firebase_auth_required
+def delete_character(request, character_id):
+    """Удаление пользовательского характера"""
+    try:
+        # Получаем объект характера с проверкой владельца
+        character = get_object_or_404(CustomCharacter, id=character_id, firebase_user_id=request.firebase_user_id)
+        character_name = character.name
+        
+        # Удаляем характер
+        character.delete()
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'success'})
+        else:
+            messages.success(request, f'Характер "{character_name}" успешно удален')
+            return redirect('ai_discussion:manage_characters')
+    except Exception as e:
+        logger.error(f"Error deleting character: {e}")
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+        else:
+            messages.error(request, f'Ошибка при удалении характера: {str(e)}')
+            return redirect('ai_discussion:manage_characters')
+
+@require_POST
+def select_participants(request):
+    """Выбор участников перед созданием обсуждения"""
+    # Получаем список всех участников и выбранных
+    static_participants = []
+    custom_participants = []
+    
+    # Загружаем статические участники из файла настроек
+    try:
+        with open('discusser_settings.json', 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+            for i, participant in enumerate(settings.get('settings', [])):
+                static_participants.append({
+                    'id': f'{i+1}',
+                    'name': participant.get('name', f'Участник {i+1}'),
+                    'type': participant.get('discusser_type', 'ai'),
+                    'is_custom': False,
+                    'default_order': i+1  # Добавляем информацию о порядке
+                })
+    except Exception as e:
+        logger.error(f"Error loading static participants: {e}")
+    
+    # Если пользователь авторизован, добавляем его пользовательские характеры
+    if request.firebase_user_id:
+        user_characters = CustomCharacter.objects.filter(firebase_user_id=request.firebase_user_id)
+        for idx, character in enumerate(user_characters):
+            custom_participants.append({
+                'id': f'custom_{character.id}',
+                'name': character.name,
+                'type': character.discusser_type,
+                'is_custom': True,
+                'default_order': len(static_participants) + idx + 1  # Порядковый номер после статических
+            })
+    
+    # Возвращаем JSON с данными всех участников
+    return JsonResponse({
+        'static_participants': static_participants,
+        'custom_participants': custom_participants
+    })
