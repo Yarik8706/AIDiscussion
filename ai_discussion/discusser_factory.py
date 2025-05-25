@@ -1,10 +1,10 @@
 import os
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Any
 
 from .discusser_base import BaseDiscusser
 from .discusser import Discusser
 from .simple_discusser import SimpleDiscusser
-from .cognitive_discusser import CognitiveDiscusser
+from ai_discussion.cognitive_discusser import CognitiveDiscusser
 
 class DiscusserFactory:
     """Factory class for creating different types of discussers."""
