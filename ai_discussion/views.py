@@ -1,3 +1,5 @@
+import os
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -127,6 +129,8 @@ def home(request):
         processing = True
     if request.GET.get('error'):
         error_message = request.GET.get('error')
+
+
     
     # Get user discussions if authenticated
     if request.firebase_user_id:
@@ -626,10 +630,10 @@ def discussions_list(request):
     if request.firebase_user_id:
         # Для авторизованных пользователей показываем только их обсуждения
         discussions = Discussion.objects.filter(firebase_user_id=request.firebase_user_id).order_by('-created_at')
-    else:
-        # Для неавторизованных пользователей показываем публичные обсуждения
-        discussions = Discussion.objects.filter(firebase_user_id__isnull=True).order_by('-created_at')
-    
+    # else:
+    #     # Для неавторизованных пользователей показываем публичные обсуждения
+    #     discussions = Discussion.objects.filter(firebase_user_id__isnull=True).order_by('-created_at')
+    #
     return render(request, 'ai_discussion/discussions_list.html', {
         'discussions': discussions,
         'is_authenticated': request.firebase_user_id is not None
