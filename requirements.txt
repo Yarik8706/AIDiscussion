@@ -1,6 +1,5 @@
 django>=5.2.0
 aiogram
-google-genai
 python-dotenv
 whitenoise
 dj-database-url
@@ -11,3 +10,4 @@ firebase-admin
 autogen-agentchat>=0.5.6
 autogen-ext[openai]>=0.5.6
 autogen-agentchat[gemini]~=0.2
+pyrebase
