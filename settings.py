@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-m(c6h-z4z7wsd!l9zy5%a6y1o42+-=xfkc%qb4rqi_3)@j$*@n')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['*']
 VERCEL_DEPLOYMENT = os.environ.get('VERCEL_DEPLOYMENT', 'False') == 'True'
