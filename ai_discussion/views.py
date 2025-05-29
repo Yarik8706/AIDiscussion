@@ -346,7 +346,7 @@ def reset_password(request):
             logger.error(f"Password reset error: {e}")
             error_message = "Произошла ошибка при отправке сброса пароля"
     
-    return render(request, 'ai_discussion/reset-password.html', {
+    return render(request, 'ai_discussion/reset_password.html', {
         'error_message': error_message,
         'success_message': success_message
     })
@@ -630,10 +630,10 @@ def discussions_list(request):
     if request.firebase_user_id:
         # Для авторизованных пользователей показываем только их обсуждения
         discussions = Discussion.objects.filter(firebase_user_id=request.firebase_user_id).order_by('-created_at')
-    # else:
-    #     # Для неавторизованных пользователей показываем публичные обсуждения
-    #     discussions = Discussion.objects.filter(firebase_user_id__isnull=True).order_by('-created_at')
-    #
+    else:
+        # Для неавторизованных пользователей показываем пустой список
+        discussions = []
+
     return render(request, 'ai_discussion/discussions_list.html', {
         'discussions': discussions,
         'is_authenticated': request.firebase_user_id is not None

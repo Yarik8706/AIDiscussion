@@ -156,7 +156,7 @@ class CognitiveDiscusser(Discusser):
             logger.debug("Calling proxy_agent.initiate_chat with task")
             result = await self.group_chat.run(task=cognitive_prompt)
             logger.debug(f"Cognitive simulation completed")
-            return "\n ----------------------- \n".join(i.content for i in result.messages)
+            return result.messages[-1].content
 
         except Exception as e:
             logger.error(f"Error in cognitive simulation: {e}", exc_info=True)

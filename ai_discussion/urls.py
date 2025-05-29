@@ -12,7 +12,7 @@ urlpatterns = [
     # Authentication pages
     path('login/', views.user_login, name='login'),
     path('signup/', views.user_signup, name='signup'),
-    path('reset-password/', views.reset_password, name='reset_password'),
+    path('reset_password/', views.reset_password, name='reset_password'),
     path('logout/', views.user_logout, name='logout'),
     
     # OAuth authentication

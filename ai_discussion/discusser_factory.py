@@ -85,7 +85,7 @@ class DiscusserFactory:
                 api_key=api_key,
                 context=context,
                 name=name,
-                model=config.get('model', 'gemini-2.0-flash-001'),
+                model=config.get('model', 'gemini-2.0-flash'),
                 backend_type=config.get('backend_type', 'gemini'),
                 cognitive_agents=cognitive_agents
             )

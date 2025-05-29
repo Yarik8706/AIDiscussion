@@ -89,10 +89,10 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/">Главная</a>
                     </li>
+                    {% if request.firebase_user_id %}
                     <li class="nav-item">
                         <a class="nav-link" href="/discussions/">Мои обсуждения</a>
                     </li>
-                    {% if request.firebase_user_id %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'ai_discussion:manage_characters' %}">Мои персонажи</a>
                     </li>
