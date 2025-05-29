@@ -1,10 +1,14 @@
 #!/bin/bash
-# Установка пакетов из requirements.txt
+set -e  # сразу прерываемся при ошибке
+
+echo "=== Установка зависимостей ==="
+pip install --upgrade pip
 pip install -r requirements.txt
 
-# Сборка статических файлов
+echo "=== Применение миграций ==="
+python manage.py migrate --noinput
+
+echo "=== Сборка статических файлов ==="
 python manage.py collectstatic --noinput
 
-# Миграции базы данных
-python manage.py makemigrations
-python manage.py migrate 
+echo "=== Готово ==="
