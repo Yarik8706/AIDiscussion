@@ -1,15 +1,6 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "wsgi.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb",
-        "runtime": "python3.11"
-      }
-    }
-  ],
+  "buildCommand": "bash build_files.sh",
   "routes": [
     {
       "src": "/static/(.*)",
@@ -20,7 +11,6 @@
       "dest": "wsgi.py"
     }
   ],
-  "buildCommand": "bash build_files.sh",
   "env": {
     "DJANGO_SETTINGS_MODULE": "settings"
   }
