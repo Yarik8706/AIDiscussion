@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
-import pyrebase
+import empyrebase
 from django.conf import settings
 
 # Configure logging
@@ -97,7 +97,7 @@ def get_firebase_client():
     """
     try:
         config = get_firebase_config()
-        firebase = pyrebase.initialize_app(config)
+        firebase = empyrebase.initialize_app(config)
         return firebase
     except Exception as e:
         logger.error(f"Error initializing Firebase client: {e}")

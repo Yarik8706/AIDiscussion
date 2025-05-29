@@ -10,3 +10,4 @@ firebase-admin
 autogen-agentchat>=0.5.6
 autogen-ext[openai]>=0.5.6
 autogen-agentchat[gemini]~=0.2
+empyrebase
