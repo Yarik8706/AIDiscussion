@@ -31,11 +31,11 @@ class AIBackend(abc.ABC):
 
 
 class GeminiBackend(AIBackend):
-    """Gemini-specific implementation of the AI backend."""
-    
+    """Gemini-specific implementation of the AI backend using direct HTTP calls."""
+
     def __init__(self, api_key: str, agent_name: str, context: str, model: str = 'gemini-2.0-flash-001'):
         """Initialize the Gemini backend.
-        
+
         Args:
             api_key: The Gemini API key
             agent_name: The name of the agent to use for responses
@@ -46,29 +46,14 @@ class GeminiBackend(AIBackend):
         self.agent_name = agent_name
         self.context = context
         self.model = model
-        self.genai_client = None
-        self.model_client = None
-        
+        self.client = None
+
     async def initialize(self) -> None:
-        """Initialize the Gemini backend with Google's generative AI API."""
-        try:
-            import google.generativeai as genai
-            
-            # Configure the API
-            genai.configure(api_key=self.api_key)
-            
-            # Generate content using the model
-            self.genai_client = genai
-            self.model_client = genai.GenerativeModel(self.model)
-            
-            # Ensure the system context is initialized
-            self._initialization_test = await self.generate_response("Initialization test")
-            
-        except ImportError:
-            raise ImportError("Google generative AI package is required. Install it with 'pip install google-generativeai'.")
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize Gemini backend: {str(e)}")
-    
+        """Create the HTTP client used for requests."""
+        import httpx
+
+        self.client = httpx.AsyncClient(base_url="https://generativelanguage.googleapis.com/v1beta/")
+
     async def generate_response(self, prompt: str, discussion_history: Optional[List[str]] = None) -> str:
         """Generate a response using the Gemini model.
         
@@ -90,22 +75,32 @@ class GeminiBackend(AIBackend):
             # Prepare the message with system context
             system_message = f"{self.context}\n\nИнструкция: {full_prompt}"
             
-            # Generate response
-            response = await self.model_client.generate_content_async(system_message)
-            
-            if hasattr(response, 'text'):
-                return response.text
-            
-            # Fallback
-            return str(response)
+            if self.client is None:
+                raise RuntimeError("Gemini backend not initialized")
+
+            payload = {
+                "contents": [{
+                    "role": "user",
+                    "parts": [{"text": system_message}]
+                }]
+            }
+
+            response = await self.client.post(
+                f"models/{self.model}:generateContent?key={self.api_key}",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
         except Exception as e:
             print(f"Error in generate_response: {e}")
             return f"Error: {str(e)}"
-    
+
     async def close(self) -> None:
-        """Close the model client."""
-        # No explicit close method for Google's generative AI client
-        pass
+        """Close the HTTP client."""
+        if self.client:
+            await self.client.aclose()
 
 
 class OpenAIBackend(AIBackend):
