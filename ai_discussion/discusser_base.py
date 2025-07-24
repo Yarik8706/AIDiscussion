@@ -4,6 +4,7 @@ import re
 from typing import List, Optional, Union
 
 from .ai_backends import AIBackend
+from .utils import format_history
 
 class BaseDiscusser(abc.ABC):
     """Abstract base class for discussers that participate in AI discussions.
@@ -64,6 +65,4 @@ class BaseDiscusser(abc.ABC):
         Returns:
             Formatted discussion text
         """
-        if isinstance(prompt, list):
-            return "\n".join(prompt)
-        return prompt 
+        return format_history(prompt)

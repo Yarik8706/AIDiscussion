@@ -12,3 +12,4 @@ autogen-ext[openai]>=0.5.6
 empyrebase
 channels==4.0.0
 
+pytest

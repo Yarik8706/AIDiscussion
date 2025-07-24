@@ -1,24 +1,40 @@
-from .discusser import Discusser    
+"""High level discussion routine used by the web application."""
+
+from __future__ import annotations
+
 import asyncio
 import json
-import os
 import logging
-import re
+import os
+from typing import Awaitable, Callable, Iterable, List, Optional, Tuple
 
-def strip_markdown(text):
-    # Удалить markdown-форматирование: **, *, _, `, >, #, ~~, и т.п.
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold**
-    text = re.sub(r'\*([^*]+)\*', r'\1', text)        # *italic*
-    text = re.sub(r'__([^_]+)__', r'\1', text)          # __bold__
-    text = re.sub(r'_([^_]+)_', r'\1', text)            # _italic_
-    text = re.sub(r'`([^`]+)`', r'\1', text)            # `code`
-    text = re.sub(r'~~([^~]+)~~', r'\1', text)          # ~~strikethrough~~
-    text = re.sub(r'^>\s?', '', text, flags=re.MULTILINE) # > quote
-    text = re.sub(r'^#+\s?', '', text, flags=re.MULTILINE) # # heading
-    text = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1', text) # [text](url)
-    return text
+from .discusser import Discusser
+from .discusser_base import BaseDiscusser
+from .utils import strip_markdown
 
-async def run_discussion(participants, question: str, max_rounds: int = 50, send_callback=None, discussion_id=None, check_if_stopped=None):
+
+async def run_discussion(
+    participants: Iterable[BaseDiscusser],
+    question: str,
+    max_rounds: int = 50,
+    send_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    discussion_id: Optional[str] = None,
+    check_if_stopped: Optional[Callable[[str], Awaitable[bool]]] = None,
+) -> Tuple[Optional[str], List[str]]:
+    """Run a multi-turn discussion until consensus or timeout.
+
+    Args:
+        participants: Iterable of discusser instances participating in the talk.
+        question: Initial question asked by the user.
+        max_rounds: Maximum number of rounds to run.
+        send_callback: Optional coroutine used to send intermediate messages.
+        discussion_id: Identifier used when checking for early termination.
+        check_if_stopped: Callback returning ``True`` if the discussion should
+            stop early.
+
+    Returns:
+        A tuple with summary text (or ``None``) and the full discussion history.
+    """
     logging.info(f"Начало обсуждения: {question}")
     discussion_history = [f"Вопрос пользователя: {question}. Вы должны ответить на заданную тему за 150 сообщений. Контролируйте ваше обсуждение, чтобы прийти к общему ответу на тему за данной количеством сообщений."]
     consensus = False
@@ -88,4 +104,4 @@ async def run_discussion(participants, question: str, max_rounds: int = 50, send
     except Exception as e:
         summary = f"Ошибка при получении вывода: {e}"
     logging.info(f"Обсуждение завершено. Статус: {'остановлено досрочно' if is_stopped else 'завершено нормально'}")
-    return summary, discussion_history 
+    return summary, discussion_history
